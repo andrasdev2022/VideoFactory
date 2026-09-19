@@ -12,6 +12,7 @@ def make_result(
     *,
     present=True,
     motion=True,
+    temporal=True,
     instances=1,
 ):
 
@@ -20,7 +21,7 @@ def make_result(
             motion,
 
         temporal_progression_coherent=
-            True,
+            temporal,
 
         source_frame_continuity_ok=
             True,
@@ -241,6 +242,103 @@ class VideoSemanticQCPolicyTests(
                 "duplicated main character"
                 in error
                 for error in errors
+            )
+        )
+
+
+    def test_static_hold_allows_no_detectable_motion(
+        self,
+    ):
+
+        scene = {
+            "characters": [
+                "char-001",
+            ],
+
+            "semantic_qc_policy": {
+                "version":
+                    "still_image_fallback_v2",
+
+                "motion_mode":
+                    "static_hold",
+
+                "allowed_exit_character_ids":
+                    [],
+            },
+        }
+
+        passed, errors, warnings = (
+            evaluate_result(
+                scene,
+                make_result(
+                    motion=False,
+                ),
+            )
+        )
+
+        self.assertTrue(
+            passed
+        )
+
+        self.assertEqual(
+            errors,
+            [],
+        )
+
+        self.assertTrue(
+            any(
+                "static-hold"
+                in warning
+                for warning in warnings
+            )
+        )
+
+
+    def test_static_hold_allows_no_active_temporal_progression(
+        self,
+    ):
+
+        scene = {
+            "characters": [
+                "char-001",
+            ],
+
+            "semantic_qc_policy": {
+                "version":
+                    "still_image_fallback_v2",
+
+                "motion_mode":
+                    "static_hold",
+
+                "allowed_exit_character_ids":
+                    [],
+            },
+        }
+
+        passed, errors, warnings = (
+            evaluate_result(
+                scene,
+                make_result(
+                    motion=False,
+                    temporal=False,
+                ),
+            )
+        )
+
+        self.assertTrue(
+            passed
+        )
+
+        self.assertEqual(
+            errors,
+            [],
+        )
+
+        self.assertTrue(
+            any(
+                "temporal progression"
+                in warning
+                for warning in warnings
             )
         )
 
