@@ -10,6 +10,12 @@ import sys
 import urllib.request
 
 from runwayml import RunwayML
+from local_ltx_provider import (
+    calculate_num_frames as calculate_ltx_num_frames,
+    generate as generate_local_ltx,
+    load_config as load_local_ltx_config,
+    validate_config as validate_local_ltx_config,
+)
 from validator import load_json
 from pipeline_status import set_legacy_status_from_stage
 
@@ -25,6 +31,11 @@ JOB_FILE = PROJECT_ROOT / "jobs" / "video_job.json"
 # ---------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------
+
+VIDEO_PROVIDER = os.getenv(
+    "VIDEO_PROVIDER",
+    "local_ltx",
+).strip().lower()
 
 VIDEO_MODEL = os.getenv(
     "RUNWAY_VIDEO_MODEL",
@@ -505,7 +516,7 @@ def download_file(
 # ---------------------------------------------------------
 
 def generate_scene_video(
-    client: RunwayML,
+    client: RunwayML | None,
     job: dict,
     scene: dict,
     force: bool,
@@ -615,9 +626,53 @@ def generate_scene_video(
             f"is not available."
         )
 
-    provider_duration = get_provider_duration(
-        render_duration
-    )
+    if VIDEO_PROVIDER == "runway":
+
+        provider_duration = float(
+            get_provider_duration(
+                render_duration
+            )
+        )
+
+    elif VIDEO_PROVIDER == "local_ltx":
+
+        ltx_config = load_local_ltx_config()
+
+        ltx_errors = validate_local_ltx_config(
+            ltx_config
+        )
+
+        if ltx_errors:
+
+            raise RuntimeError(
+                "\n".join(
+                    ltx_errors
+                )
+            )
+
+        ltx_num_frames = calculate_ltx_num_frames(
+            render_duration,
+            ltx_config.fps,
+        )
+
+        provider_duration = (
+            float(
+                ltx_num_frames
+            )
+            / float(
+                ltx_config.fps
+            )
+        )
+
+    else:
+
+        raise RuntimeError(
+            (
+                "Unsupported VIDEO_PROVIDER: "
+                f"{VIDEO_PROVIDER}. "
+                "Expected 'local_ltx' or 'runway'."
+            )
+        )
 
     # -----------------------------------------------------
     # Existing artifact
@@ -634,6 +689,7 @@ def generate_scene_video(
             render_duration_sec=render_duration,
             provider_duration_sec=provider_duration,
             source_image=image_file,
+            provider=VIDEO_PROVIDER,
         ):
 
             print(
@@ -650,14 +706,8 @@ def generate_scene_video(
         )
 
     # -----------------------------------------------------
-    # Build Runway request
+    # Provider request
     # -----------------------------------------------------
-
-    prompt_image = (
-        image_to_data_uri(
-            image_path
-        )
-    )
 
     prompt_text = (
         build_video_prompt(
@@ -672,7 +722,7 @@ def generate_scene_video(
     )
 
     print(
-        f"  Model:        {VIDEO_MODEL}"
+        f"  Provider:     {VIDEO_PROVIDER}"
     )
 
     print(
@@ -680,11 +730,7 @@ def generate_scene_video(
     )
 
     print(
-        f"  Provider dur: {provider_duration}s"
-    )
-
-    print(
-        f"  Ratio:        {VIDEO_RATIO}"
+        f"  Provider dur: {provider_duration:.3f}s"
     )
 
     print(
@@ -714,59 +760,167 @@ def generate_scene_video(
             f"{correction}"
         )
 
-    # -----------------------------------------------------
-    # Runway generation
-    # -----------------------------------------------------
+    provider_metadata: dict[str, Any]
 
-    task = (
-        client
-        .image_to_video
-        .create(
-            model=VIDEO_MODEL,
-            prompt_image=prompt_image,
-            prompt_text=prompt_text,
-            ratio=VIDEO_RATIO,
-            duration=provider_duration,
-        )
-        .wait_for_task_output(
-            timeout=TASK_TIMEOUT_SEC,
-        )
-    )
+    if VIDEO_PROVIDER == "runway":
 
-    # -----------------------------------------------------
-    # Validate provider output
-    # -----------------------------------------------------
+        if client is None:
 
-    if not task.output:
+            raise RuntimeError(
+                "Runway client is not initialized."
+            )
 
-        raise RuntimeError(
-            f"Scene {scene_id}: "
-            f"Runway task returned no output."
+        prompt_image = image_to_data_uri(
+            image_path
         )
 
-    video_url = task.output[0]
-
-    if not video_url:
-
-        raise RuntimeError(
-            f"Scene {scene_id}: "
-            f"Runway returned empty video URL."
+        print(
+            f"  Model:        {VIDEO_MODEL}"
         )
 
-    # -----------------------------------------------------
-    # Download immediately
-    # -----------------------------------------------------
+        print(
+            f"  Ratio:        {VIDEO_RATIO}"
+        )
 
-    download_file(
-        video_url,
-        output_file,
-    )
+        task = (
+            client
+            .image_to_video
+            .create(
+                model=VIDEO_MODEL,
+                prompt_image=prompt_image,
+                prompt_text=prompt_text,
+                ratio=VIDEO_RATIO,
+                duration=int(
+                    round(
+                        provider_duration
+                    )
+                ),
+            )
+            .wait_for_task_output(
+                timeout=TASK_TIMEOUT_SEC,
+            )
+        )
+
+        if not task.output:
+
+            raise RuntimeError(
+                f"Scene {scene_id}: "
+                f"Runway task returned no output."
+            )
+
+        video_url = task.output[
+            0
+        ]
+
+        if not video_url:
+
+            raise RuntimeError(
+                f"Scene {scene_id}: "
+                f"Runway returned empty video URL."
+            )
+
+        download_file(
+            video_url,
+            output_file,
+        )
+
+        provider_metadata = {
+            "provider":
+                "runway",
+
+            "model":
+                VIDEO_MODEL,
+
+            "ratio":
+                VIDEO_RATIO,
+
+            "task_id":
+                str(
+                    task.id
+                ),
+        }
+
+    else:
+
+        previous_video = scene.get(
+            "video",
+            {},
+        )
+
+        previous_seed = (
+            previous_video.get(
+                "seed"
+            )
+            if previous_video.get(
+                "provider"
+            )
+            == "local_ltx"
+            else None
+        )
+
+        result = generate_local_ltx(
+            input_image=image_path,
+            output_file=output_file,
+            prompt=prompt_text,
+            duration_sec=render_duration,
+            scene_id=scene_id,
+            previous_seed=previous_seed,
+        )
+
+        provider_duration = (
+            result.duration_sec
+        )
+
+        provider_metadata = {
+            "provider":
+                "local_ltx",
+
+            "model":
+                result.model_id,
+
+            "ratio":
+                (
+                    f"{result.width}:"
+                    f"{result.height}"
+                ),
+
+            "task_id":
+                (
+                    f"local-ltx-"
+                    f"{scene_id}-"
+                    f"{result.seed}"
+                ),
+
+            "width":
+                result.width,
+
+            "height":
+                result.height,
+
+            "fps":
+                result.fps,
+
+            "num_frames":
+                result.num_frames,
+
+            "inference_steps":
+                result.inference_steps,
+
+            "guidance_scale":
+                result.guidance_scale,
+
+            "seed":
+                result.seed,
+
+            "offload_mode":
+                result.offload_mode,
+        }
 
     if not output_file.exists():
 
         raise RuntimeError(
             f"Scene {scene_id}: "
-            f"downloaded video does not exist."
+            f"provider video does not exist."
         )
 
     file_size = (
@@ -801,20 +955,19 @@ def generate_scene_video(
         "file":
             relative_video_path,
 
-        "provider":
-            "runway",
-
-        "model":
-            VIDEO_MODEL,
-
-        "ratio":
-            VIDEO_RATIO,
+        **provider_metadata,
 
         "duration_sec":
-            provider_duration,
+            round(
+                provider_duration,
+                6,
+            ),
 
         "provider_duration_sec":
-            provider_duration,
+            round(
+                provider_duration,
+                6,
+            ),
 
         "target_render_duration_sec":
             round(
@@ -834,9 +987,6 @@ def generate_scene_video(
 
         "source_image":
             image_file,
-
-        "task_id":
-            str(task.id),
 
         "file_size_bytes":
             file_size,
@@ -1033,8 +1183,9 @@ def video_metadata_matches_current_request(
     scene: dict,
     output_file: Path,
     render_duration_sec: float,
-    provider_duration_sec: int,
+    provider_duration_sec: float,
     source_image: str,
+    provider: str | None = None,
 ) -> bool:
 
     video = scene.get(
@@ -1080,7 +1231,7 @@ def video_metadata_matches_current_request(
             )
         )
 
-        stored_provider_duration = int(
+        stored_provider_duration = float(
             video.get(
                 "provider_duration_sec"
             )
@@ -1102,9 +1253,21 @@ def video_metadata_matches_current_request(
 
         return False
 
-    if (
+    if abs(
         stored_provider_duration
-        != provider_duration_sec
+        - float(
+            provider_duration_sec
+        )
+    ) > 0.001:
+
+        return False
+
+    if (
+        provider is not None
+        and video.get(
+            "provider"
+        )
+        != provider
     ):
 
         return False
@@ -1343,13 +1506,31 @@ def main() -> int:
     # API secret
     # -----------------------------------------------------
 
-    if not os.getenv(
-        "RUNWAYML_API_SECRET"
+    if (
+        VIDEO_PROVIDER
+        == "runway"
+        and not os.getenv(
+            "RUNWAYML_API_SECRET"
+        )
     ):
 
         print(
             "\nERROR: RUNWAYML_API_SECRET "
             "environment variable is not set."
+        )
+
+        return 1
+
+    if VIDEO_PROVIDER not in {
+        "local_ltx",
+        "runway",
+    }:
+
+        print(
+            (
+                "\nERROR: unsupported VIDEO_PROVIDER "
+                f"'{VIDEO_PROVIDER}'."
+            )
         )
 
         return 1
@@ -1426,8 +1607,23 @@ def main() -> int:
     )
 
     print(
-        f"Model:  {VIDEO_MODEL}"
+        f"Provider: {VIDEO_PROVIDER}"
     )
+
+    if VIDEO_PROVIDER == "runway":
+
+        print(
+            f"Model:    {VIDEO_MODEL}"
+        )
+
+    else:
+
+        print(
+            (
+                "Model:    "
+                + load_local_ltx_config().model_id
+            )
+        )
 
     print(
         f"Scenes: {len(selected_scenes)}"
@@ -1437,7 +1633,12 @@ def main() -> int:
     # Client
     # -----------------------------------------------------
 
-    client = RunwayML()
+    client = (
+        RunwayML()
+        if VIDEO_PROVIDER
+        == "runway"
+        else None
+    )
 
     generated_count = 0
     failed_count = 0
