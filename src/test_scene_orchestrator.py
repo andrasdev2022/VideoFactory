@@ -6,7 +6,7 @@ from scene_orchestrator import (
     ACTION_GENERATE_VIDEO,
     ACTION_IMAGE_QC,
     ACTION_IMAGE_SEMANTIC_QC,
-    ACTION_REGENERATE_MOTION,
+    ACTION_SAFE_MOTION_FALLBACK,
     ACTION_RETRY_VIDEO_FROM_QC,
     ACTION_STOP_IMAGE,
     ACTION_STOP_TIMING,
@@ -14,6 +14,8 @@ from scene_orchestrator import (
     ACTION_TRIM_VIDEO,
     ACTION_VIDEO_QC,
     ACTION_VIDEO_SEMANTIC_QC,
+    apply_safe_motion_fallback,
+    build_safe_motion_prompt,
     choose_next_action,
 )
 
@@ -33,6 +35,7 @@ def make_state(
     video_semantic_qc=None,
     trimmed_status=None,
     trimmed_file=None,
+    motion_strategy=None,
 ):
 
     return {
@@ -74,6 +77,9 @@ def make_state(
 
         "trimmed_file":
             trimmed_file,
+
+        "motion_strategy":
+            motion_strategy,
     }
 
 
@@ -350,7 +356,7 @@ class SceneOrchestratorTests(
         )
 
 
-    def test_second_semantic_failure_changes_motion(
+    def test_second_semantic_failure_uses_safe_motion(
         self,
     ):
 
@@ -372,7 +378,210 @@ class SceneOrchestratorTests(
 
         self.assertEqual(
             action,
-            ACTION_REGENERATE_MOTION,
+            ACTION_SAFE_MOTION_FALLBACK,
+        )
+
+
+    def test_failed_safe_fallback_does_not_repeat(
+        self,
+    ):
+
+        action = self.choose(
+            make_state(
+                image_status="generated",
+                image_file="scene.png",
+                image_qc="passed",
+                image_semantic_qc="passed",
+
+                video_status="generated",
+                video_file="scene.mp4",
+                video_qc="passed",
+                video_semantic_qc="failed",
+                motion_strategy="safe_fallback_v1",
+            ),
+            image_attempts=1,
+            video_attempts=3,
+            max_video_attempts=4,
+        )
+
+        self.assertEqual(
+            action,
+            ACTION_STOP_VIDEO,
+        )
+
+
+    def test_safe_motion_prompt_is_locked_and_character_preserving(
+        self,
+    ):
+
+        job = {
+            "characters": [
+                {
+                    "character_id":
+                        "char-001",
+                    "name":
+                        "Mike",
+                },
+                {
+                    "character_id":
+                        "char-002",
+                    "name":
+                        "Mr. Whiskers",
+                },
+            ],
+            "visuals": {
+                "scenes": [
+                    {
+                        "scene_id":
+                            5,
+
+                        "characters": [
+                            "char-001",
+                            "char-002",
+                        ],
+                    },
+                ],
+            },
+        }
+
+        prompt = build_safe_motion_prompt(
+            job,
+            5,
+        )
+
+        self.assertIn(
+            "Locked-off camera",
+            prompt,
+        )
+
+        self.assertIn(
+            "Mike",
+            prompt,
+        )
+
+        self.assertIn(
+            "Mr. Whiskers",
+            prompt,
+        )
+
+        self.assertIn(
+            "No walking",
+            prompt,
+        )
+
+        self.assertIn(
+            "no morphing",
+            prompt,
+        )
+
+
+    def test_apply_safe_motion_fallback_invalidates_video(
+        self,
+    ):
+
+        job = {
+            "characters": [
+                {
+                    "character_id":
+                        "char-001",
+                    "name":
+                        "Mike",
+                },
+            ],
+            "visuals": {
+                "scenes": [
+                    {
+                        "scene_id":
+                            5,
+
+                        "characters": [
+                            "char-001",
+                        ],
+
+                        "motion_prompt":
+                            "Mike walks quickly.",
+
+                        "video": {
+                            "task_id":
+                                "task-old",
+
+                            "semantic_qc": {
+                                "status":
+                                    "failed",
+
+                                "errors": [
+                                    "duplicate Mike",
+                                ],
+
+                                "overall_notes":
+                                    "Identity drift.",
+                            },
+                        },
+                    },
+                ],
+            },
+            "assembly": {
+                "status":
+                    "passed",
+            },
+            "output": {
+                "base_video_file":
+                    "base.mp4",
+            },
+        }
+
+        prompt = apply_safe_motion_fallback(
+            job,
+            5,
+        )
+
+        scene = (
+            job[
+                "visuals"
+            ][
+                "scenes"
+            ][0]
+        )
+
+        self.assertEqual(
+            scene[
+                "motion_strategy"
+            ],
+            "safe_fallback_v1",
+        )
+
+        self.assertEqual(
+            scene[
+                "motion_prompt"
+            ],
+            prompt,
+        )
+
+        self.assertNotIn(
+            "video",
+            scene,
+        )
+
+        self.assertEqual(
+            len(
+                scene[
+                    "motion_prompt_history"
+                ]
+            ),
+            1,
+        )
+
+        self.assertNotIn(
+            "assembly",
+            job,
+        )
+
+        self.assertIsNone(
+            job[
+                "output"
+            ][
+                "base_video_file"
+            ]
         )
 
 
