@@ -1415,6 +1415,38 @@ def invalidate_downstream_outputs(
             "video_file"
         ] = None
 
+    subtitles = job.get(
+        "subtitles"
+    )
+
+    if isinstance(
+        subtitles,
+        dict,
+    ):
+
+        subtitles.pop(
+            "generation",
+            None,
+        )
+
+        subtitles.pop(
+            "render",
+            None,
+        )
+
+        subtitles[
+            "subtitle_file"
+        ] = None
+
+    if isinstance(
+        output,
+        dict,
+    ):
+
+        output[
+            "subtitled_video_file"
+        ] = None
+
     job.pop(
         "subtitles_render",
         None,
