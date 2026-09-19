@@ -59,6 +59,11 @@ LOW_CONFIDENCE_WARNING = float(
 )
 
 
+QC_POLICY_VERSION = (
+    "target_window_v2"
+)
+
+
 # ---------------------------------------------------------
 # STRUCTURED OUTPUT
 # ---------------------------------------------------------
@@ -531,6 +536,58 @@ def get_actual_duration(
     )
 
 
+def get_evaluation_duration(
+    scene: dict,
+) -> float:
+
+    actual_duration = (
+        get_actual_duration(
+            scene
+        )
+    )
+
+    target_duration = (
+        scene
+        .get(
+            "video",
+            {},
+        )
+        .get(
+            "target_render_duration_sec"
+        )
+    )
+
+    if target_duration is None:
+
+        return actual_duration
+
+    try:
+
+        target_duration = float(
+            target_duration
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+
+        return actual_duration
+
+    if target_duration <= 0:
+
+        return actual_duration
+
+    # Semantic QC must evaluate only the time window that will
+    # survive exact trimming. Provider tail frames are irrelevant
+    # to the final video and must not fail the scene.
+
+    return min(
+        actual_duration,
+        target_duration,
+    )
+
+
 # ---------------------------------------------------------
 # FRAME TIMESTAMPS
 # ---------------------------------------------------------
@@ -604,7 +661,7 @@ def extract_frames(
         / video_file
     )
 
-    duration = get_actual_duration(
+    duration = get_evaluation_duration(
         scene
     )
 
@@ -1249,6 +1306,25 @@ def apply_result(
                 timezone.utc
             ).isoformat(),
 
+        "policy_version":
+            QC_POLICY_VERSION,
+
+        "raw_duration_sec":
+            round(
+                get_actual_duration(
+                    scene
+                ),
+                3,
+            ),
+
+        "evaluation_duration_sec":
+            round(
+                get_evaluation_duration(
+                    scene
+                ),
+                3,
+            ),
+
         "model":
             VISION_MODEL,
 
@@ -1424,7 +1500,7 @@ def cleanup_frames(
 def main() -> int:
 
     print("=" * 60)
-    print("VIDEO FACTORY - VIDEO SEMANTIC QC v2")
+    print("VIDEO FACTORY - VIDEO SEMANTIC QC v3")
     print("=" * 60)
 
     args = parse_args()
