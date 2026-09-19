@@ -60,7 +60,7 @@ LOW_CONFIDENCE_WARNING = float(
 
 
 QC_POLICY_VERSION = (
-    "target_window_v3_dupcheck"
+    "target_window_v4_static_fallback"
 )
 
 
@@ -146,6 +146,11 @@ MOTION
 - Does the chronological frame sequence appear consistent with
   the requested motion?
 - Does the action meaningfully progress in the intended direction?
+- If semantic_qc_policy.motion_mode is "static_hold", visible motion
+  is NOT required. A stable hold on the approved source image is an
+  acceptable result. An imperceptible or extremely subtle push-in may
+  be present, but do not fail the video merely because sampled frames
+  appear visually identical.
 
 TEMPORAL COHERENCE
 - Do frames form one coherent continuous shot?
@@ -1103,18 +1108,54 @@ def evaluate_result(
     errors: list[str] = []
     warnings: list[str] = []
 
+    motion_mode = (
+        scene
+        .get(
+            "semantic_qc_policy",
+            {},
+        )
+        .get(
+            "motion_mode"
+        )
+    )
+
+    static_hold = (
+        motion_mode
+        == "static_hold"
+    )
+
     if not result.motion_matches_prompt:
 
-        errors.append(
-            "Video motion does not sufficiently "
-            "match motion_prompt."
-        )
+        if static_hold:
+
+            warnings.append(
+                "Visible motion was not detected, which is "
+                "acceptable for the deterministic static-hold "
+                "fallback."
+            )
+
+        else:
+
+            errors.append(
+                "Video motion does not sufficiently "
+                "match motion_prompt."
+            )
 
     if not result.temporal_progression_coherent:
 
-        errors.append(
-            "Video does not show coherent temporal progression."
-        )
+        if static_hold:
+
+            warnings.append(
+                "No active temporal progression was detected, "
+                "which is acceptable for the deterministic "
+                "static-hold fallback."
+            )
+
+        else:
+
+            errors.append(
+                "Video does not show coherent temporal progression."
+            )
 
     if not result.source_frame_continuity_ok:
 
@@ -1524,7 +1565,7 @@ def cleanup_frames(
 def main() -> int:
 
     print("=" * 60)
-    print("VIDEO FACTORY - VIDEO SEMANTIC QC v4")
+    print("VIDEO FACTORY - VIDEO SEMANTIC QC v5")
     print("=" * 60)
 
     args = parse_args()
