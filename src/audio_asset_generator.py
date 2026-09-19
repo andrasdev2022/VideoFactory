@@ -85,6 +85,15 @@ SFX_PROMPT_INFLUENCE = float(
     )
 )
 
+# ElevenLabs Sound Effects currently accepts at most 450
+# characters. Keep a safety margin for provider-side validation.
+SFX_MAX_PROMPT_CHARS = int(
+    os.getenv(
+        "ELEVENLABS_SFX_MAX_PROMPT_CHARS",
+        "430",
+    )
+)
+
 
 def parse_args() -> argparse.Namespace:
 
@@ -415,13 +424,78 @@ def build_music_prompt(
     )
 
 
+def normalize_prompt_text(
+    value: Any,
+) -> str:
+
+    return " ".join(
+        str(
+            value
+        )
+        .replace(
+            "\n",
+            " ",
+        )
+        .split()
+    )
+
+
+def truncate_prompt_text(
+    value: str,
+    max_chars: int,
+) -> str:
+
+    value = normalize_prompt_text(
+        value
+    )
+
+    if max_chars <= 0:
+
+        return ""
+
+    if len(
+        value
+    ) <= max_chars:
+
+        return value
+
+    if max_chars <= 3:
+
+        return value[
+            :max_chars
+        ]
+
+    candidate = value[
+        :max_chars - 1
+    ].rstrip()
+
+    last_space = candidate.rfind(
+        " "
+    )
+
+    if (
+        last_space
+        >= max_chars
+        // 2
+    ):
+
+        candidate = candidate[
+            :last_space
+        ].rstrip()
+
+    return (
+        candidate
+        + "…"
+    )
+
+
 def build_sfx_prompt(
     job: dict,
     effect: dict[str, Any],
     scene_id: int,
 ) -> str:
 
-    effect_name = (
+    effect_name = normalize_prompt_text(
         effect.get(
             "effect"
         )
@@ -459,7 +533,7 @@ def build_sfx_prompt(
         if voice_text:
 
             context_parts.append(
-                str(
+                normalize_prompt_text(
                     voice_text
                 )
             )
@@ -473,29 +547,77 @@ def build_sfx_prompt(
         if motion:
 
             context_parts.append(
-                str(
+                normalize_prompt_text(
                     motion
                 )
             )
 
-    context = " ".join(
-        context_parts
+    prefix = (
+        "Clean isolated sound effect: "
+        + truncate_prompt_text(
+            effect_name,
+            100,
+        )
+        + ". "
     )
 
-    if len(
-        context
-    ) > 320:
+    suffix = (
+        " Short, clear, punchy, suitable for absurd corporate "
+        "comedy. No speech, no music bed, no narration, no branded "
+        "sound, and no copyrighted audio."
+    )
 
-        context = context[
-            :320
-        ]
+    context = normalize_prompt_text(
+        " ".join(
+            context_parts
+        )
+    )
 
-    return (
-        f"Clean isolated sound effect: {effect_name}. "
-        f"Scene context: {context}. "
-        "Short, clear, punchy, suitable for absurd corporate comedy. "
-        "No speech, no music bed, no narration, no branded sound, "
-        "and no copyrighted audio."
+    available_context_chars = max(
+        0,
+        SFX_MAX_PROMPT_CHARS
+        - len(
+            prefix
+        )
+        - len(
+            suffix
+        )
+        - len(
+            "Scene context: ."
+        ),
+    )
+
+    context = truncate_prompt_text(
+        context,
+        available_context_chars,
+    )
+
+    if context:
+
+        prompt = (
+            prefix
+            + "Scene context: "
+            + context
+            + "."
+            + suffix
+        )
+
+    else:
+
+        prompt = (
+            prefix
+            + suffix.lstrip()
+        )
+
+    prompt = normalize_prompt_text(
+        prompt
+    )
+
+    # Final hard guard: never send an over-limit prompt even if
+    # future wording/configuration changes above.
+    return truncate_prompt_text(
+        prompt,
+        SFX_MAX_PROMPT_CHARS,
     )
 
 
