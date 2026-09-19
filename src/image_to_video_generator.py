@@ -1415,6 +1415,16 @@ def main() -> int:
                 f"{exc}"
             )
 
+            print(
+                f"  Exception type: "
+                f"{type(exc).__name__}"
+            )
+
+            print(
+                f"  Exception repr: "
+                f"{exc!r}"
+            )
+
             # ---------------------------------------------
             # Replace old artifact metadata.
             #
@@ -1429,6 +1439,12 @@ def main() -> int:
 
                 "error":
                     str(exc),
+
+                "error_type":
+                    type(exc).__name__,
+
+                "error_repr":
+                    repr(exc),
 
                 "qc": {
                     "status":
