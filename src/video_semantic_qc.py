@@ -60,7 +60,7 @@ LOW_CONFIDENCE_WARNING = float(
 
 
 QC_POLICY_VERSION = (
-    "target_window_v2"
+    "target_window_v3_dupcheck"
 )
 
 
