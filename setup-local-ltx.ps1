@@ -16,14 +16,76 @@ Write-Host " VIDEO FACTORY - LOCAL LTX SETUP"
 Write-Host "============================================================"
 Write-Host ""
 
-$nvidiaSmi = Get-Command nvidia-smi -ErrorAction SilentlyContinue
+function Resolve-NvidiaSmi {
 
-if ($null -eq $nvidiaSmi) {
-    throw "nvidia-smi was not found. Install/update the NVIDIA driver first."
+    $command = Get-Command `
+        nvidia-smi `
+        -ErrorAction SilentlyContinue
+
+    if ($null -ne $command) {
+        return $command.Source
+    }
+
+    $candidates = @(
+        (Join-Path $env:WINDIR "System32\nvidia-smi.exe"),
+        (Join-Path $env:ProgramFiles "NVIDIA Corporation\NVSMI\nvidia-smi.exe"),
+        (Join-Path ${env:ProgramW6432} "NVIDIA Corporation\NVSMI\nvidia-smi.exe")
+    )
+
+    foreach ($candidate in $candidates) {
+
+        if (
+            -not [string]::IsNullOrWhiteSpace($candidate) -and
+            (Test-Path $candidate)
+        ) {
+            return $candidate
+        }
+    }
+
+    return $null
 }
 
+
+$nvidiaSmi = Resolve-NvidiaSmi
+
 Write-Host "NVIDIA:"
-& nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
+
+if ($null -ne $nvidiaSmi) {
+
+    Write-Host "  nvidia-smi:"
+    Write-Host "    $nvidiaSmi"
+
+    & $nvidiaSmi `
+        --query-gpu=name,memory.total,driver_version `
+        --format=csv,noheader
+
+}
+else {
+
+    Write-Warning (
+        "nvidia-smi.exe was not found in PATH or the common " +
+        "Windows NVIDIA locations. Setup will continue; the " +
+        "PyTorch CUDA preflight below is the authoritative test."
+    )
+
+    Write-Host ""
+    Write-Host "Windows video adapters:"
+
+    try {
+
+        Get-CimInstance Win32_VideoController |
+            Select-Object Name, DriverVersion |
+            Format-Table -AutoSize
+
+    }
+    catch {
+
+        Write-Warning (
+            "Unable to query Win32_VideoController: " +
+            $_.Exception.Message
+        )
+    }
+}
 
 Write-Host ""
 Write-Host "Creating dedicated Python $PythonVersion environment:"
