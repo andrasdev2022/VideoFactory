@@ -5,6 +5,7 @@ import subprocess
 import sys
 import json
 import os
+import re
 
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,11 @@ GENERATED_STATUSES = {
     "completed",
     "passed",
 }
+
+
+VIDEO_SEMANTIC_QC_POLICY_VERSION = (
+    "target_window_v2"
+)
 
 
 ACTION_GENERATE_IMAGE = (
@@ -342,6 +348,11 @@ def inspect_scene_state(
                 "status"
             ),
 
+        "video_semantic_qc_policy_version":
+            video_semantic_qc.get(
+                "policy_version"
+            ),
+
         "trimmed_status":
             trimmed.get(
                 "status"
@@ -386,7 +397,7 @@ def infer_allowed_exit_character_ids(
         {},
     )
 
-    source_text = " ".join(
+    text_fragments = [
         str(
             value
         )
@@ -405,7 +416,28 @@ def infer_allowed_exit_character_ids(
             ),
         )
         if value
-    ).lower()
+    ]
+
+    # Keep inference local to one sentence/clause.
+    #
+    # The previous implementation searched a large character window
+    # across concatenated text. In Scene 5 that allowed the phrase
+    # "departing employee" attached to Mike to leak into the nearby
+    # Mr. Whiskers context and incorrectly mark both characters as
+    # allowed to leave.
+
+    segments: list[str] = []
+
+    for fragment in text_fragments:
+
+        segments.extend(
+            segment.strip().lower()
+            for segment in re.split(
+                r"[.!?;\n]+",
+                fragment,
+            )
+            if segment.strip()
+        )
 
     character_map = {
         character.get(
@@ -461,35 +493,18 @@ def infer_allowed_exit_character_ids(
 
         lowered_name = name.lower()
 
-        name_positions = [
-            index
-            for index in range(
-                len(
-                    source_text
+        allowed_for_character = any(
+            lowered_name in segment
+            and any(
+                marker in (
+                    " "
+                    + segment
+                    + " "
                 )
-            )
-            if source_text.startswith(
-                lowered_name,
-                index,
-            )
-        ]
-
-        allowed_for_character = False
-
-        for position in name_positions:
-
-            window = source_text[
-                position:
-                position + 160
-            ]
-
-            if any(
-                marker in window
                 for marker in exit_markers
-            ):
-
-                allowed_for_character = True
-                break
+            )
+            for segment in segments
+        )
 
         if allowed_for_character:
 
@@ -1056,6 +1071,22 @@ def choose_next_action(
             "video_semantic_qc"
         )
     )
+
+    # A failed semantic result from an older QC policy must be
+    # re-evaluated before spending another generation attempt.
+    # target_window_v2 evaluates only the part of the provider
+    # clip that will actually survive exact trimming.
+
+    if (
+        video_semantic_qc
+        == "failed"
+        and state.get(
+            "video_semantic_qc_policy_version"
+        )
+        != VIDEO_SEMANTIC_QC_POLICY_VERSION
+    ):
+
+        return ACTION_VIDEO_SEMANTIC_QC
 
     if (
         video_semantic_qc
@@ -1658,7 +1689,7 @@ def print_scene_state(
 def main() -> int:
 
     print("=" * 60)
-    print("VIDEO FACTORY - SCENE ORCHESTRATOR v5")
+    print("VIDEO FACTORY - SCENE ORCHESTRATOR v6")
     print("=" * 60)
 
     args = parse_args()
