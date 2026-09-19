@@ -663,7 +663,7 @@ def allocate_render_targets(
             "duration target within scene bounds."
         )
 
-    return {
+    rounded_targets = {
         scene_id:
             round(
                 duration,
@@ -672,6 +672,85 @@ def allocate_render_targets(
         for scene_id, duration
         in targets.items()
     }
+
+    rounding_difference = round(
+        float(
+            target_total_duration_sec
+        )
+        - sum(
+            rounded_targets.values()
+        ),
+        3,
+    )
+
+    if abs(
+        rounding_difference
+    ) >= 0.001:
+
+        adjustable = [
+            metric
+            for metric in metrics
+            if not metric[
+                "protected"
+            ]
+        ]
+
+        for metric in reversed(
+            adjustable
+        ):
+
+            scene_id = metric[
+                "scene_id"
+            ]
+
+            candidate = round(
+                rounded_targets[
+                    scene_id
+                ]
+                + rounding_difference,
+                3,
+            )
+
+            if (
+                metric[
+                    "min_render_duration_sec"
+                ]
+                <= candidate
+                <= metric[
+                    "max_render_duration_sec"
+                ]
+            ):
+
+                rounded_targets[
+                    scene_id
+                ] = candidate
+
+                rounding_difference = round(
+                    float(
+                        target_total_duration_sec
+                    )
+                    - sum(
+                        rounded_targets.values()
+                    ),
+                    3,
+                )
+
+                if abs(
+                    rounding_difference
+                ) < 0.001:
+
+                    break
+
+    if abs(
+        rounding_difference
+    ) >= 0.001:
+
+        raise RuntimeError(
+            "Unable to preserve the exact global target "
+            "after millisecond rounding."
+        )
+
+    return rounded_targets
 
 
 def build_rewrite_plan(
