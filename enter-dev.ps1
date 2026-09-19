@@ -70,6 +70,7 @@ if (-not (Test-Path $EnvFile)) {
     Write-Host "  $EnvFile"
     Write-Host ""
 
+    $ErrorActionPreference = $PreviousErrorActionPreference
     return
 }
 
@@ -157,14 +158,16 @@ $env:VIDEO_PROVIDER = "local_ltx"
 # Local LTX baseline for RTX 2070 / 8 GB VRAM.
 $env:LOCAL_LTX_PYTHON = Join-Path $ProjectRoot ".venv-ltx\Scripts\python.exe"
 $env:LOCAL_LTX_WORKER = Join-Path $ProjectRoot "src\local_ltx_worker.py"
+$env:LOCAL_LTX_SERVICE = Join-Path $ProjectRoot "src\local_ltx_service.py"
 $env:LOCAL_LTX_MODEL_ID = "Lightricks/LTX-Video"
 $env:LOCAL_LTX_WIDTH = "512"
 $env:LOCAL_LTX_HEIGHT = "896"
 $env:LOCAL_LTX_FPS = "24"
-$env:LOCAL_LTX_INFERENCE_STEPS = "20"
+$env:LOCAL_LTX_INFERENCE_STEPS = "12"
 $env:LOCAL_LTX_GUIDANCE_SCALE = "3.0"
 $env:LOCAL_LTX_SEED_BASE = "171198"
 $env:LOCAL_LTX_TIMEOUT_SEC = "7200"
+$env:LOCAL_LTX_SERVER_START_TIMEOUT_SEC = "300"
 $env:LOCAL_LTX_OFFLOAD_MODE = "sequential"
 
 
@@ -383,7 +386,9 @@ if ($env:VIDEO_PROVIDER -eq "local_ltx") {
     Write-Host "    model = $env:LOCAL_LTX_MODEL_ID"
     Write-Host "    resolution = $env:LOCAL_LTX_WIDTH x $env:LOCAL_LTX_HEIGHT"
     Write-Host "    fps = $env:LOCAL_LTX_FPS"
+    Write-Host "    steps = $env:LOCAL_LTX_INFERENCE_STEPS"
     Write-Host "    offload = $env:LOCAL_LTX_OFFLOAD_MODE"
+    Write-Host "    persistent service = enabled by master pipeline"
 }
 else {
     Write-Host "    model = $env:RUNWAY_VIDEO_MODEL"
