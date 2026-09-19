@@ -650,6 +650,65 @@ def evaluate_technical_media(
     )
 
 
+def get_static_hold_scene_ids(
+    job: dict,
+) -> list[int]:
+
+    result: list[int] = []
+
+    for scene in (
+        job
+        .get(
+            "visuals",
+            {},
+        )
+        .get(
+            "scenes",
+            [],
+        )
+    ):
+
+        scene_id = scene.get(
+            "scene_id"
+        )
+
+        motion_mode = (
+            scene
+            .get(
+                "semantic_qc_policy",
+                {},
+            )
+            .get(
+                "motion_mode"
+            )
+        )
+
+        motion_strategy = scene.get(
+            "motion_strategy"
+        )
+
+        if (
+            motion_mode
+            == "static_hold"
+            or motion_strategy
+            == "still_image_fallback_v1"
+        ):
+
+            if scene_id is not None:
+
+                result.append(
+                    int(
+                        scene_id
+                    )
+                )
+
+    return sorted(
+        set(
+            result
+        )
+    )
+
+
 def validate_pipeline_integrity(
     job: dict,
 ) -> tuple[
@@ -808,6 +867,30 @@ def validate_pipeline_integrity(
             )
         )
 
+    static_hold_scene_ids = (
+        get_static_hold_scene_ids(
+            job
+        )
+    )
+
+    if static_hold_scene_ids:
+
+        warnings.append(
+            (
+                "Deterministic static-hold video fallback was used "
+                "for scene(s) "
+                + ", ".join(
+                    str(
+                        scene_id
+                    )
+                    for scene_id
+                    in static_hold_scene_ids
+                )
+                + ". Final technical QC can pass, but these scenes "
+                "should receive manual visual review before publishing."
+            )
+        )
+
     return (
         errors,
         warnings,
@@ -873,6 +956,11 @@ def build_source_signature(
             )
             .get(
                 "voiceover"
+            ),
+
+        "static_hold_scene_ids":
+            get_static_hold_scene_ids(
+                job
             ),
     }
 
@@ -1317,6 +1405,12 @@ def run_final_qc_export(
         )
     )
 
+    static_hold_scene_ids = (
+        get_static_hold_scene_ids(
+            job
+        )
+    )
+
     job[
         "final_qc"
     ] = {
@@ -1342,6 +1436,14 @@ def run_final_qc_export(
 
         "publish_ready":
             thumbnail_ready,
+
+        "manual_visual_review_recommended":
+            bool(
+                static_hold_scene_ids
+            ),
+
+        "static_hold_scene_ids":
+            static_hold_scene_ids,
 
         "export":
             export,
