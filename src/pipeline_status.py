@@ -19,6 +19,7 @@ PIPELINE_STAGES = (
     "voice_qc",
     "scene_timing",
     "global_timing",
+    "base_assembly",
 )
 
 def _make_summary(
@@ -591,6 +592,45 @@ def _compute_scene_trimmed_status(
     )
 
 
+def _compute_base_assembly_status(
+    job: dict,
+) -> dict[str, Any]:
+
+    assembly = job.get(
+        "assembly",
+        {},
+    )
+
+    status = assembly.get(
+        "status"
+    )
+
+    if status == "failed":
+
+        return _make_summary(
+            total=1,
+            ready=0,
+            failed=1,
+        )
+
+    if (
+        status == "passed"
+        and assembly.get(
+            "file"
+        )
+    ):
+
+        return _make_summary(
+            total=1,
+            ready=1,
+        )
+
+    return _make_summary(
+        total=1,
+        ready=0,
+    )
+
+
 def refresh_pipeline_status(
     job: dict,
 ) -> dict[str, Any]:
@@ -669,6 +709,11 @@ def refresh_pipeline_status(
 
         "global_timing":
             _compute_global_timing_status(
+                job
+            ),
+
+        "base_assembly":
+            _compute_base_assembly_status(
                 job
             ),
     }
@@ -836,6 +881,17 @@ def set_legacy_status_from_stage(
                 "global_timing_passed",
             "failed":
                 "global_timing_failed",
+        },
+
+        "base_assembly": {
+            "pending":
+                "base_assembly_pending",
+            "partial":
+                "base_assembly_partial",
+            "completed":
+                "base_assembly_passed",
+            "failed":
+                "base_assembly_failed",
         },
     }
 
