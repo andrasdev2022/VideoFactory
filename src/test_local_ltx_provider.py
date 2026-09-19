@@ -186,6 +186,39 @@ class LocalLTXProviderTests(
             joined,
         )
 
+    def test_worker_binds_image_to_video_pipeline_name(
+        self,
+    ):
+
+        worker_file = (
+            Path(__file__)
+            .with_name(
+                "local_ltx_worker.py"
+            )
+        )
+
+        source = worker_file.read_text(
+            encoding="utf-8",
+        )
+
+        self.assertIn(
+            "LTXImageToVideoPipeline,",
+            source,
+        )
+
+        self.assertIn(
+            "pipeline = (\n"
+            "            LTXImageToVideoPipeline\n"
+            "            .from_pretrained(",
+            source,
+        )
+
+        self.assertNotIn(
+            "            DiffusionPipeline,\n"
+            "            export_to_video,",
+            source,
+        )
+
 
 if __name__ == "__main__":
 
