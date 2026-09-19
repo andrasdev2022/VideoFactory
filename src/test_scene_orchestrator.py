@@ -6,6 +6,7 @@ from scene_orchestrator import (
     ACTION_GENERATE_VIDEO,
     ACTION_IMAGE_QC,
     ACTION_IMAGE_SEMANTIC_QC,
+    ACTION_LOCAL_VIDEO_FALLBACK,
     ACTION_SAFE_MOTION_FALLBACK,
     ACTION_UPGRADE_SAFE_MOTION_POLICY,
     ACTION_RETRY_VIDEO_FROM_QC,
@@ -34,6 +35,7 @@ def make_state(
     image_qc=None,
     image_semantic_qc=None,
     video_status=None,
+    video_provider=None,
     video_file=None,
     video_qc=None,
     video_semantic_qc=None,
@@ -68,6 +70,9 @@ def make_state(
 
         "video_status":
             video_status,
+
+        "video_provider":
+            video_provider,
 
         "video_file":
             video_file,
@@ -476,7 +481,7 @@ class SceneOrchestratorTests(
         )
 
 
-    def test_failed_safe_fallback_v2_does_not_repeat(
+    def test_failed_safe_fallback_v2_uses_local_video_fallback(
         self,
     ):
 
@@ -488,6 +493,7 @@ class SceneOrchestratorTests(
                 image_semantic_qc="passed",
 
                 video_status="generated",
+                video_provider="runway",
                 video_file="scene.mp4",
                 video_qc="passed",
                 video_semantic_qc="failed",
@@ -495,7 +501,36 @@ class SceneOrchestratorTests(
             ),
             image_attempts=1,
             video_attempts=4,
-            max_video_attempts=5,
+            max_video_attempts=4,
+        )
+
+        self.assertEqual(
+            action,
+            ACTION_LOCAL_VIDEO_FALLBACK,
+        )
+
+
+    def test_failed_local_video_fallback_stops(
+        self,
+    ):
+
+        action = self.choose(
+            make_state(
+                image_status="generated",
+                image_file="scene.png",
+                image_qc="passed",
+                image_semantic_qc="passed",
+
+                video_status="generated",
+                video_provider="local_ffmpeg",
+                video_file="scene.mp4",
+                video_qc="passed",
+                video_semantic_qc="failed",
+                motion_strategy="still_image_fallback_v1",
+            ),
+            image_attempts=1,
+            video_attempts=4,
+            max_video_attempts=4,
         )
 
         self.assertEqual(
