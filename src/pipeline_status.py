@@ -23,6 +23,7 @@ PIPELINE_STAGES = (
     "subtitles",
     "audio_assets",
     "audio_mix",
+    "final_qc",
 )
 
 def _make_summary(
@@ -811,6 +812,51 @@ def _compute_audio_mix_status(
     )
 
 
+def _compute_final_qc_status(
+    job: dict,
+) -> dict[str, Any]:
+
+    final_qc = job.get(
+        "final_qc",
+        {},
+    )
+
+    if final_qc.get(
+        "status"
+    ) == "failed":
+
+        return _make_summary(
+            total=1,
+            ready=0,
+            failed=1,
+        )
+
+    export = final_qc.get(
+        "export",
+        {},
+    )
+
+    if (
+        final_qc.get(
+            "status"
+        )
+        == "passed"
+        and export.get(
+            "video_file"
+        )
+    ):
+
+        return _make_summary(
+            total=1,
+            ready=1,
+        )
+
+    return _make_summary(
+        total=1,
+        ready=0,
+    )
+
+
 def refresh_pipeline_status(
     job: dict,
 ) -> dict[str, Any]:
@@ -909,6 +955,11 @@ def refresh_pipeline_status(
 
         "audio_mix":
             _compute_audio_mix_status(
+                job
+            ),
+
+        "final_qc":
+            _compute_final_qc_status(
                 job
             ),
     }
@@ -1120,6 +1171,17 @@ def set_legacy_status_from_stage(
                 "audio_mix_passed",
             "failed":
                 "audio_mix_failed",
+        },
+
+        "final_qc": {
+            "pending":
+                "final_qc_pending",
+            "partial":
+                "final_qc_partial",
+            "completed":
+                "final_qc_passed",
+            "failed":
+                "final_qc_failed",
         },
     }
 
