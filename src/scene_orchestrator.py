@@ -1271,7 +1271,7 @@ def choose_next_action(
         )
     )
 
-    # Repeated Runway recovery is exhausted. If the
+    # Repeated provider recovery is exhausted. If the
     # scene already used safe_fallback_v2, do not spend another
     # vision pass trying to salvage a manually invalid artifact.
     # Switch directly to the deterministic local fallback.
@@ -3214,8 +3214,8 @@ def main() -> int:
             if rc != 0:
 
                 print(
-                    "\nWARNING: Runway generation with the "
-                    "safe-motion fallback failed."
+                    "\nWARNING: Video-provider generation with "
+                    "the safe-motion fallback failed."
                 )
 
                 print(
@@ -3333,7 +3333,7 @@ def main() -> int:
         ):
 
             print(
-                "\nRunway recovery exhausted."
+                "\nVideo-provider recovery exhausted."
             )
 
             print(
@@ -3396,7 +3396,7 @@ def main() -> int:
                     "return_code":
                         rc,
 
-                    "runway_attempts_preserved":
+                    "provider_attempts_preserved":
                         video_attempts,
                 },
             )
