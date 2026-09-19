@@ -690,6 +690,27 @@ def generate_scene_voice(
             "timing"
         ]
 
+    # Any base assembly containing the old voice
+    # is now stale.
+
+    job.pop(
+        "assembly",
+        None,
+    )
+
+    output = job.get(
+        "output"
+    )
+
+    if isinstance(
+        output,
+        dict,
+    ):
+
+        output[
+            "base_video_file"
+        ] = None
+
     print(
         f"  Saved:       "
         f"{relative_file}"
