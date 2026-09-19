@@ -24,13 +24,8 @@ class VoiceQCTests(
             voice_qc.MIN_SAMPLE_RATE
         )
 
-        self.old_tolerance = (
-            voice_qc.DURATION_TOLERANCE_SEC
-        )
-
         voice_qc.MIN_FILE_SIZE_BYTES = 5000
         voice_qc.MIN_SAMPLE_RATE = 22050
-        voice_qc.DURATION_TOLERANCE_SEC = 0.25
 
 
     def tearDown(
@@ -43,10 +38,6 @@ class VoiceQCTests(
 
         voice_qc.MIN_SAMPLE_RATE = (
             self.old_min_rate
-        )
-
-        voice_qc.DURATION_TOLERANCE_SEC = (
-            self.old_tolerance
         )
 
 
@@ -103,7 +94,7 @@ class VoiceQCTests(
         )
 
 
-    def test_slight_duration_tolerance_passes(
+    def test_slightly_long_voice_passes(
         self,
     ):
 

@@ -31,13 +31,6 @@ JOB_FILE = (
 )
 
 
-DURATION_TOLERANCE_SEC = float(
-    os.getenv(
-        "VOICE_QC_DURATION_TOLERANCE_SEC",
-        "0.25",
-    )
-)
-
 MIN_DURATION_SEC = float(
     os.getenv(
         "VOICE_QC_MIN_DURATION_SEC",
@@ -656,7 +649,7 @@ def check_scene_voice(
 def main() -> int:
 
     print("=" * 60)
-    print("VIDEO FACTORY - VOICE QC v1")
+    print("VIDEO FACTORY - VOICE QC v2")
     print("=" * 60)
 
     args = parse_args()
@@ -752,11 +745,6 @@ def main() -> int:
     print(
         f"Scenes: "
         f"{len(selected_scenes)}"
-    )
-
-    print(
-        f"Duration tolerance: "
-        f"{DURATION_TOLERANCE_SEC:.3f}s"
     )
 
     passed_count = 0

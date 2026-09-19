@@ -138,6 +138,45 @@ def get_expected_duration(
     scene_id: int,
 ) -> float | None:
 
+    # The raw scene video is generated at the provider
+    # duration, which may be the ceiling of the exact
+    # audio-driven render target. Final assembly will trim
+    # the clip to target_render_duration_sec.
+
+    for scene in job.get(
+        "visuals",
+        {},
+    ).get(
+        "scenes",
+        [],
+    ):
+
+        if scene.get(
+            "scene_id"
+        ) != scene_id:
+
+            continue
+
+        video = scene.get(
+            "video",
+            {},
+        )
+
+        duration = video.get(
+            "provider_duration_sec",
+            video.get(
+                "duration_sec"
+            ),
+        )
+
+        if duration is not None:
+
+            return float(
+                duration
+            )
+
+    # Legacy fallback for older artifacts.
+
     for scene in job.get(
         "script",
         {},
@@ -146,7 +185,9 @@ def get_expected_duration(
         [],
     ):
 
-        if scene.get("scene_id") == scene_id:
+        if scene.get(
+            "scene_id"
+        ) == scene_id:
 
             duration = scene.get(
                 "duration_sec"
@@ -158,6 +199,50 @@ def get_expected_duration(
             return float(
                 duration
             )
+
+    return None
+
+
+def get_target_render_duration(
+    job: dict,
+    scene_id: int,
+) -> float | None:
+
+    for scene in job.get(
+        "script",
+        {},
+    ).get(
+        "scenes",
+        [],
+    ):
+
+        if scene.get(
+            "scene_id"
+        ) != scene_id:
+
+            continue
+
+        timing = scene.get(
+            "timing",
+            {},
+        )
+
+        if timing.get(
+            "status"
+        ) != "passed":
+
+            return None
+
+        duration = timing.get(
+            "render_duration_sec"
+        )
+
+        if duration is None:
+            return None
+
+        return float(
+            duration
+        )
 
     return None
 
@@ -775,8 +860,14 @@ def check_scene_video(
             ).isoformat(),
 
         "expected": {
-            "duration_sec":
+            "provider_duration_sec":
                 expected_duration,
+
+            "target_render_duration_sec":
+                get_target_render_duration(
+                    job,
+                    scene_id,
+                ),
 
             "ratio":
                 expected_ratio_text,
@@ -885,7 +976,7 @@ def any_scene_video_qc_failed(
 def main() -> int:
 
     print("=" * 60)
-    print("VIDEO FACTORY - VIDEO QC v1")
+    print("VIDEO FACTORY - VIDEO QC v2")
     print("=" * 60)
 
     args = parse_args()
