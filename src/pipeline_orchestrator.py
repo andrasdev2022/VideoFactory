@@ -461,6 +461,14 @@ def run_worker(
         "PYTHONUNBUFFERED"
     ] = "1"
 
+    child_env[
+        "PYTHONUTF8"
+    ] = "1"
+
+    child_env[
+        "PYTHONIOENCODING"
+    ] = "utf-8"
+
     completed = subprocess.run(
         command,
         cwd=PROJECT_ROOT,
@@ -1082,10 +1090,14 @@ def main() -> int:
     try:
 
         sys.stdout.reconfigure(
+            encoding="utf-8",
+            errors="replace",
             line_buffering=True,
         )
 
         sys.stderr.reconfigure(
+            encoding="utf-8",
+            errors="replace",
             line_buffering=True,
         )
 
