@@ -367,6 +367,35 @@ class SceneOrchestratorTests(
         )
 
 
+    def test_old_safe_v2_qc_refreshes_policy_before_recheck(
+        self,
+    ):
+
+        action = self.choose(
+            make_state(
+                image_status="generated",
+                image_file="scene.png",
+                image_qc="passed",
+                image_semantic_qc="passed",
+
+                video_status="generated",
+                video_file="scene.mp4",
+                video_qc="passed",
+                video_semantic_qc="failed",
+                video_semantic_qc_policy_version=None,
+                motion_strategy="safe_fallback_v2",
+            ),
+            image_attempts=1,
+            video_attempts=4,
+            max_video_attempts=4,
+        )
+
+        self.assertEqual(
+            action,
+            ACTION_UPGRADE_SAFE_MOTION_POLICY,
+        )
+
+
     def test_first_semantic_failure_uses_qc_retry(
         self,
     ):
