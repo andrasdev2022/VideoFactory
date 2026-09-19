@@ -179,6 +179,74 @@ class AudioAssetGeneratorTests(
         )
 
 
+    def test_sfx_prompt_never_exceeds_provider_limit(
+        self,
+    ):
+
+        job = {
+            "script": {
+                "scenes": [
+                    {
+                        "scene_id":
+                            3,
+
+                        "voice": {
+                            "input_text":
+                                (
+                                    "This is deliberately very long narration "
+                                    * 20
+                                ),
+                        },
+                    },
+                ],
+            },
+
+            "visuals": {
+                "scenes": [
+                    {
+                        "scene_id":
+                            3,
+
+                        "motion_prompt":
+                            (
+                                "This is deliberately very long motion context "
+                                * 20
+                            ),
+                    },
+                ],
+            },
+        }
+
+        prompt = build_sfx_prompt(
+            job,
+            {
+                "effect":
+                    "dramatic button press",
+            },
+            3,
+        )
+
+        self.assertLessEqual(
+            len(
+                prompt
+            ),
+            audio_asset_generator
+            .SFX_MAX_PROMPT_CHARS,
+        )
+
+        self.assertLessEqual(
+            len(
+                prompt
+            ),
+            450,
+        )
+
+        self.assertIn(
+            "dramatic button press",
+            prompt,
+        )
+
+
     def test_sfx_request_clamps_duration_and_uses_v2_model(
         self,
     ):
