@@ -179,6 +179,16 @@ $env:FINAL_MIX_DUCK_ATTACK_MS = "20"
 $env:FINAL_MIX_DUCK_RELEASE_MS = "250"
 $env:FINAL_MIX_DURATION_TOLERANCE_SEC = "0.15"
 
+$env:ELEVENLABS_API_BASE_URL = "https://api.elevenlabs.io"
+$env:ELEVENLABS_MUSIC_MODEL = "music_v2_5"
+$env:ELEVENLABS_SFX_MODEL = "eleven_text_to_sound_v2"
+$env:ELEVENLABS_MUSIC_OUTPUT_FORMAT = "mp3_48000_192"
+$env:ELEVENLABS_SFX_OUTPUT_FORMAT = "mp3_44100_128"
+$env:ELEVENLABS_HTTP_TIMEOUT_SEC = "300"
+$env:ELEVENLABS_SFX_DEFAULT_DURATION_SEC = "1.5"
+$env:ELEVENLABS_SFX_PROMPT_INFLUENCE = "0.5"
+$env:ELEVENLABS_SFX_MAX_PROMPT_CHARS = "430"
+
 
 # ------------------------------------------------------------
 # IMAGE QC
@@ -286,6 +296,21 @@ if (
 else {
 
     Write-Host "  RUNWAYML_API_SECRET:  OK"
+}
+
+
+if (
+    [string]::IsNullOrWhiteSpace(
+        $env:ELEVENLABS_API_KEY
+    )
+) {
+
+    Write-Host "  ELEVENLABS_API_KEY:   MISSING"
+
+}
+else {
+
+    Write-Host "  ELEVENLABS_API_KEY:   OK"
 }
 
 
