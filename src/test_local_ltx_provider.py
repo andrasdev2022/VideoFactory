@@ -34,7 +34,7 @@ class LocalLTXProviderTests(
             width=width,
             height=height,
             fps=24,
-            inference_steps=20,
+            inference_steps=12,
             guidance_scale=3.0,
             seed_base=171198,
             timeout_sec=7200,
@@ -186,7 +186,20 @@ class LocalLTXProviderTests(
             joined,
         )
 
-    def test_worker_binds_image_to_video_pipeline_name(
+
+    def test_rtx_2070_baseline_uses_12_steps(
+        self,
+    ):
+
+        config = self.make_config()
+
+        self.assertEqual(
+            config.inference_steps,
+            12,
+        )
+
+
+def test_worker_binds_image_to_video_pipeline_name(
         self,
     ):
 
