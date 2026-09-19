@@ -8,6 +8,7 @@ from scene_orchestrator import (
     ACTION_IMAGE_SEMANTIC_QC,
     ACTION_LOCAL_VIDEO_FALLBACK,
     ACTION_SAFE_MOTION_FALLBACK,
+    ACTION_UPGRADE_LOCAL_FALLBACK_POLICY,
     ACTION_UPGRADE_SAFE_MOTION_POLICY,
     ACTION_RETRY_VIDEO_FROM_QC,
     ACTION_STOP_IMAGE,
@@ -20,6 +21,7 @@ from scene_orchestrator import (
     apply_safe_motion_fallback,
     build_safe_motion_prompt,
     infer_allowed_exit_character_ids,
+    upgrade_local_fallback_policy_for_existing_video,
     upgrade_safe_motion_policy_for_existing_video,
     choose_next_action,
 )
@@ -44,6 +46,7 @@ def make_state(
     trimmed_status=None,
     trimmed_file=None,
     motion_strategy=None,
+    semantic_motion_mode=None,
 ):
 
     return {
@@ -94,6 +97,9 @@ def make_state(
 
         "motion_strategy":
             motion_strategy,
+
+        "semantic_motion_mode":
+            semantic_motion_mode,
     }
 
 
@@ -510,7 +516,38 @@ class SceneOrchestratorTests(
         )
 
 
-    def test_failed_local_video_fallback_stops(
+    def test_old_local_video_fallback_upgrades_static_policy(
+        self,
+    ):
+
+        action = self.choose(
+            make_state(
+                image_status="generated",
+                image_file="scene.png",
+                image_qc="passed",
+                image_semantic_qc="passed",
+
+                video_status="generated",
+                video_provider="local_ffmpeg",
+                video_file="scene.mp4",
+                video_qc="passed",
+                video_semantic_qc="failed",
+                video_semantic_qc_policy_version=None,
+                motion_strategy="still_image_fallback_v1",
+                semantic_motion_mode=None,
+            ),
+            image_attempts=1,
+            video_attempts=4,
+            max_video_attempts=4,
+        )
+
+        self.assertEqual(
+            action,
+            ACTION_UPGRADE_LOCAL_FALLBACK_POLICY,
+        )
+
+
+    def test_failed_current_static_fallback_stops(
         self,
     ):
 
@@ -527,6 +564,7 @@ class SceneOrchestratorTests(
                 video_qc="passed",
                 video_semantic_qc="failed",
                 motion_strategy="still_image_fallback_v1",
+                semantic_motion_mode="static_hold",
             ),
             image_attempts=1,
             video_attempts=4,
@@ -536,6 +574,90 @@ class SceneOrchestratorTests(
         self.assertEqual(
             action,
             ACTION_STOP_VIDEO,
+        )
+
+
+    def test_upgrade_local_fallback_policy_preserves_video(
+        self,
+    ):
+
+        job = {
+            "visuals": {
+                "scenes": [
+                    {
+                        "scene_id":
+                            5,
+
+                        "motion_strategy":
+                            "still_image_fallback_v1",
+
+                        "motion_prompt":
+                            "Old visible push-in requirement.",
+
+                        "video": {
+                            "task_id":
+                                "local-still-1",
+
+                            "file":
+                                "scene_005_fallback.mp4",
+
+                            "semantic_qc": {
+                                "status":
+                                    "failed",
+                            },
+                        },
+                    },
+                ],
+            },
+        }
+
+        prompt = (
+            upgrade_local_fallback_policy_for_existing_video(
+                job,
+                5,
+            )
+        )
+
+        scene = (
+            job[
+                "visuals"
+            ][
+                "scenes"
+            ][0]
+        )
+
+        self.assertEqual(
+            scene[
+                "video"
+            ][
+                "file"
+            ],
+            "scene_005_fallback.mp4",
+        )
+
+        self.assertEqual(
+            scene[
+                "video"
+            ][
+                "semantic_qc"
+            ][
+                "status"
+            ],
+            "pending",
+        )
+
+        self.assertEqual(
+            scene[
+                "semantic_qc_policy"
+            ][
+                "motion_mode"
+            ],
+            "static_hold",
+        )
+
+        self.assertIn(
+            "not required to be visually detectable",
+            prompt,
         )
 
 
