@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import math
 import os
+import socket
 import subprocess
 
 from dataclasses import dataclass
@@ -109,7 +111,7 @@ def load_config() -> LocalLTXConfig:
         inference_steps=int(
             os.getenv(
                 "LOCAL_LTX_INFERENCE_STEPS",
-                "20",
+                "12",
             )
         ),
         guidance_scale=float(
@@ -346,6 +348,173 @@ def build_command(
     ]
 
 
+def server_endpoint() -> tuple[str, int] | None:
+
+    raw_port = os.getenv(
+        "LOCAL_LTX_SERVER_PORT"
+    )
+
+    if not raw_port:
+
+        return None
+
+    return (
+        os.getenv(
+            "LOCAL_LTX_SERVER_HOST",
+            "127.0.0.1",
+        ),
+        int(
+            raw_port
+        ),
+    )
+
+
+def generate_via_server(
+    *,
+    config: LocalLTXConfig,
+    input_image: Path,
+    output_file: Path,
+    prompt: str,
+    num_frames: int,
+    seed: int,
+) -> dict:
+
+    endpoint = server_endpoint()
+
+    if endpoint is None:
+
+        raise RuntimeError(
+            "Local LTX server endpoint is not configured."
+        )
+
+    host, port = endpoint
+
+    request = {
+        "action":
+            "generate",
+
+        "image":
+            str(
+                input_image
+            ),
+
+        "output":
+            str(
+                output_file
+            ),
+
+        "prompt":
+            prompt,
+
+        "width":
+            config.width,
+
+        "height":
+            config.height,
+
+        "fps":
+            config.fps,
+
+        "num_frames":
+            num_frames,
+
+        "steps":
+            config.inference_steps,
+
+        "guidance_scale":
+            config.guidance_scale,
+
+        "seed":
+            seed,
+    }
+
+    payload = (
+        json.dumps(
+            request,
+            ensure_ascii=False,
+        )
+        + "\n"
+    ).encode(
+        "utf-8"
+    )
+
+    print(
+        (
+            "\nLocal LTX service: "
+            f"{host}:{port}"
+        )
+    )
+
+    try:
+
+        with socket.create_connection(
+            (
+                host,
+                port,
+            ),
+            timeout=config.timeout_sec,
+        ) as connection:
+
+            connection.settimeout(
+                config.timeout_sec
+            )
+
+            connection.sendall(
+                payload
+            )
+
+            response_file = (
+                connection
+                .makefile(
+                    "rb"
+                )
+            )
+
+            line = (
+                response_file
+                .readline()
+            )
+
+    except OSError as exc:
+
+        raise RuntimeError(
+            (
+                "Local LTX persistent service is unavailable at "
+                f"{host}:{port}: {exc}"
+            )
+        ) from exc
+
+    if not line:
+
+        raise RuntimeError(
+            "Local LTX persistent service returned no response."
+        )
+
+    response = json.loads(
+        line.decode(
+            "utf-8"
+        )
+    )
+
+    if not response.get(
+        "ok"
+    ):
+
+        raise RuntimeError(
+            (
+                "Local LTX persistent service failed: "
+                + str(
+                    response.get(
+                        "error",
+                        "unknown error",
+                    )
+                )
+            )
+        )
+
+    return response
+
+
 def run_preflight(
     config: LocalLTXConfig | None = None,
 ) -> None:
@@ -460,70 +629,95 @@ def generate(
         missing_ok=True,
     )
 
-    command = build_command(
-        config=config,
-        input_image=input_image,
-        output_file=temporary_file,
-        prompt=prompt,
-        num_frames=num_frames,
-        seed=seed,
-    )
+    endpoint = server_endpoint()
 
-    print(
-        "\nLocal LTX command:"
-    )
+    if endpoint is not None:
 
-    print(
-        subprocess.list2cmdline(
-            command
-        )
-    )
+        try:
 
-    environment = os.environ.copy()
-
-    environment[
-        "PYTHONUTF8"
-    ] = "1"
-
-    environment[
-        "PYTHONIOENCODING"
-    ] = "utf-8"
-
-    try:
-
-        completed = subprocess.run(
-            command,
-            cwd=PROJECT_ROOT,
-            env=environment,
-            check=False,
-            timeout=config.timeout_sec,
-        )
-
-    except subprocess.TimeoutExpired as exc:
-
-        temporary_file.unlink(
-            missing_ok=True,
-        )
-
-        raise RuntimeError(
-            (
-                "Local LTX generation timed out after "
-                f"{config.timeout_sec}s."
+            generate_via_server(
+                config=config,
+                input_image=input_image,
+                output_file=temporary_file,
+                prompt=prompt,
+                num_frames=num_frames,
+                seed=seed,
             )
-        ) from exc
 
-    if completed.returncode != 0:
+        except Exception:
 
-        temporary_file.unlink(
-            missing_ok=True,
+            temporary_file.unlink(
+                missing_ok=True,
+            )
+
+            raise
+
+    else:
+
+        command = build_command(
+            config=config,
+            input_image=input_image,
+            output_file=temporary_file,
+            prompt=prompt,
+            num_frames=num_frames,
+            seed=seed,
         )
 
-        raise RuntimeError(
-            (
-                "Local LTX worker failed with return code "
-                f"{completed.returncode}."
+        print(
+            "\nLocal LTX command:"
+        )
+
+        print(
+            subprocess.list2cmdline(
+                command
             )
         )
+
+        environment = os.environ.copy()
+
+        environment[
+            "PYTHONUTF8"
+        ] = "1"
+
+        environment[
+            "PYTHONIOENCODING"
+        ] = "utf-8"
+
+        try:
+
+            completed = subprocess.run(
+                command,
+                cwd=PROJECT_ROOT,
+                env=environment,
+                check=False,
+                timeout=config.timeout_sec,
+            )
+
+        except subprocess.TimeoutExpired as exc:
+
+            temporary_file.unlink(
+                missing_ok=True,
+            )
+
+            raise RuntimeError(
+                (
+                    "Local LTX generation timed out after "
+                    f"{config.timeout_sec}s."
+                )
+            ) from exc
+
+        if completed.returncode != 0:
+
+            temporary_file.unlink(
+                missing_ok=True,
+            )
+
+            raise RuntimeError(
+                (
+                    "Local LTX worker failed with return code "
+                    f"{completed.returncode}."
+                )
+            )
 
     if (
         not temporary_file.exists()
