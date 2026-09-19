@@ -609,6 +609,26 @@ def trim_scene_video(
 
         return False
 
+    # A newly trimmed scene changes an assembly input.
+
+    job.pop(
+        "assembly",
+        None,
+    )
+
+    output = job.get(
+        "output"
+    )
+
+    if isinstance(
+        output,
+        dict,
+    ):
+
+        output[
+            "base_video_file"
+        ] = None
+
     if shutil.which(
         "ffmpeg"
     ) is None:

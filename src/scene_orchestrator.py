@@ -5,6 +5,7 @@ import subprocess
 import sys
 import json
 import os
+import re
 
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,11 @@ GENERATED_STATUSES = {
     "completed",
     "passed",
 }
+
+
+VIDEO_SEMANTIC_QC_POLICY_VERSION = (
+    "target_window_v4_static_fallback"
+)
 
 
 ACTION_GENERATE_IMAGE = (
@@ -73,8 +79,20 @@ ACTION_RETRY_VIDEO_FROM_QC = (
     "retry_video_from_qc"
 )
 
-ACTION_REGENERATE_MOTION = (
-    "regenerate_motion"
+ACTION_SAFE_MOTION_FALLBACK = (
+    "safe_motion_fallback"
+)
+
+ACTION_UPGRADE_SAFE_MOTION_POLICY = (
+    "upgrade_safe_motion_policy"
+)
+
+ACTION_LOCAL_VIDEO_FALLBACK = (
+    "local_video_fallback"
+)
+
+ACTION_UPGRADE_LOCAL_FALLBACK_POLICY = (
+    "upgrade_local_fallback_policy"
 )
 
 ACTION_COMPLETE = (
@@ -323,6 +341,11 @@ def inspect_scene_state(
                 "status"
             ),
 
+        "video_provider":
+            video.get(
+                "provider"
+            ),
+
         "video_file":
             video.get(
                 "file"
@@ -338,6 +361,11 @@ def inspect_scene_state(
                 "status"
             ),
 
+        "video_semantic_qc_policy_version":
+            video_semantic_qc.get(
+                "policy_version"
+            ),
+
         "trimmed_status":
             trimmed.get(
                 "status"
@@ -347,7 +375,683 @@ def inspect_scene_state(
             trimmed.get(
                 "file"
             ),
+
+        "motion_strategy":
+            scene.get(
+                "motion_strategy"
+            ),
+
+        "semantic_motion_mode":
+            scene
+            .get(
+                "semantic_qc_policy",
+                {},
+            )
+            .get(
+                "motion_mode"
+            ),
     }
+
+
+def infer_allowed_exit_character_ids(
+    job: dict,
+    scene_id: int,
+) -> list[str]:
+
+    script_scene = find_script_scene(
+        job,
+        scene_id,
+    )
+
+    visual_scene = find_visual_scene(
+        job,
+        scene_id,
+    )
+
+    if (
+        script_scene is None
+        or visual_scene is None
+    ):
+
+        return []
+
+    visual = script_scene.get(
+        "visual",
+        {},
+    )
+
+    text_fragments = [
+        str(
+            value
+        )
+        for value in (
+            visual.get(
+                "description",
+                ""
+            ),
+            visual.get(
+                "camera",
+                ""
+            ),
+            visual_scene.get(
+                "continuity_notes",
+                ""
+            ),
+        )
+        if value
+    ]
+
+    # Keep inference local to one sentence/clause.
+    #
+    # The previous implementation searched a large character window
+    # across concatenated text. In Scene 5 that allowed the phrase
+    # "departing employee" attached to Mike to leak into the nearby
+    # Mr. Whiskers context and incorrectly mark both characters as
+    # allowed to leave.
+
+    segments: list[str] = []
+
+    for fragment in text_fragments:
+
+        segments.extend(
+            segment.strip().lower()
+            for segment in re.split(
+                r"[.!?;\n]+",
+                fragment,
+            )
+            if segment.strip()
+        )
+
+    character_map = {
+        character.get(
+            "character_id"
+        ):
+            character.get(
+                "name"
+            )
+        for character in job.get(
+            "characters",
+            [],
+        )
+        if character.get(
+            "character_id"
+        )
+    }
+
+    exit_markers = (
+        " exits",
+        " exit ",
+        " leaves",
+        " leave ",
+        " departs",
+        " departing",
+        " walks toward",
+        " walks to",
+        " heads toward",
+        " heads to",
+        " moves toward the elevator",
+        " toward the elevator",
+    )
+
+    allowed: list[str] = []
+
+    for character_id in (
+        visual_scene.get(
+            "characters",
+            [],
+        )
+        or []
+    ):
+
+        name = character_map.get(
+            character_id
+        )
+
+        if not isinstance(
+            name,
+            str,
+        ):
+
+            continue
+
+        lowered_name = name.lower()
+
+        allowed_for_character = any(
+            lowered_name in segment
+            and any(
+                marker in (
+                    " "
+                    + segment
+                    + " "
+                )
+                for marker in exit_markers
+            )
+            for segment in segments
+        )
+
+        if allowed_for_character:
+
+            allowed.append(
+                character_id
+            )
+
+    return allowed
+
+
+def build_safe_motion_prompt(
+    job: dict,
+    scene_id: int,
+) -> str:
+
+    scene = find_visual_scene(
+        job,
+        scene_id,
+    )
+
+    if scene is None:
+
+        raise RuntimeError(
+            f"Visual scene {scene_id} "
+            f"does not exist."
+        )
+
+    allowed_exit_ids = (
+        infer_allowed_exit_character_ids(
+            job,
+            scene_id,
+        )
+    )
+
+    character_map = {
+        character.get(
+            "character_id"
+        ):
+            character.get(
+                "name"
+            )
+        for character in job.get(
+            "characters",
+            [],
+        )
+        if character.get(
+            "character_id"
+        )
+    }
+
+    allowed_exit_names = [
+        character_map.get(
+            character_id,
+            character_id,
+        )
+        for character_id in allowed_exit_ids
+    ]
+
+    fixed_names = [
+        character_map.get(
+            character_id,
+            character_id,
+        )
+        for character_id in (
+            scene.get(
+                "characters",
+                [],
+            )
+            or []
+        )
+        if character_id
+        not in allowed_exit_ids
+    ]
+
+    parts = [
+        (
+            "Locked-off camera. Preserve the approved "
+            "source-image identity, environment, and "
+            "overall composition."
+        ),
+    ]
+
+    if allowed_exit_names:
+
+        parts.append(
+            (
+                f"{', '.join(allowed_exit_names)} may continue "
+                f"the simple departure already implied by the "
+                f"approved scene and may leave frame only as a "
+                f"natural result of that departure. Do not "
+                f"duplicate, teleport, disappear abruptly, or "
+                f"reappear."
+            )
+        )
+
+    if fixed_names:
+
+        parts.append(
+            (
+                f"{', '.join(fixed_names)} remain clearly visible "
+                f"in their source-image positions for the entire "
+                f"shot."
+            )
+        )
+
+    parts.append(
+        (
+            "No camera movement, scene change, new action, "
+            "character duplication, or morphing. Keep all "
+            "identity, clothing, anatomy, props, and background "
+            "stable. Only subtle breathing, blinking, and tiny "
+            "head movement besides the explicitly allowed "
+            "departure. One continuous shot."
+        )
+    )
+
+    return " ".join(
+        parts
+    )
+
+
+def apply_safe_motion_fallback(
+    job: dict,
+    scene_id: int,
+) -> str:
+
+    scene = find_visual_scene(
+        job,
+        scene_id,
+    )
+
+    if scene is None:
+
+        raise RuntimeError(
+            f"Visual scene {scene_id} "
+            f"does not exist."
+        )
+
+    old_prompt = (
+        scene.get(
+            "motion_prompt"
+        )
+        or ""
+    )
+
+    previous_video = (
+        scene.get(
+            "video",
+            {}
+        )
+    )
+
+    previous_semantic_qc = (
+        previous_video
+        .get(
+            "semantic_qc",
+            {}
+        )
+    )
+
+    allowed_exit_ids = (
+        infer_allowed_exit_character_ids(
+            job,
+            scene_id,
+        )
+    )
+
+    new_prompt = build_safe_motion_prompt(
+        job,
+        scene_id,
+    )
+
+    history = scene.setdefault(
+        "motion_prompt_history",
+        [],
+    )
+
+    history.append(
+        {
+            "timestamp":
+                utc_now_iso(),
+
+            "reason":
+                "semantic_qc_repeated_failure",
+
+            "strategy":
+                "safe_fallback_v2",
+
+            "old_motion_prompt":
+                old_prompt,
+
+            "new_motion_prompt":
+                new_prompt,
+
+            "allowed_exit_character_ids":
+                allowed_exit_ids,
+
+            "previous_video_task_id":
+                previous_video.get(
+                    "task_id"
+                ),
+
+            "previous_semantic_qc_errors":
+                list(
+                    previous_semantic_qc.get(
+                        "errors",
+                        [],
+                    )
+                    or []
+                ),
+
+            "previous_semantic_qc_notes":
+                previous_semantic_qc.get(
+                    "overall_notes"
+                ),
+        }
+    )
+
+    scene[
+        "motion_prompt"
+    ] = new_prompt
+
+    scene[
+        "motion_strategy"
+    ] = "safe_fallback_v2"
+
+    scene[
+        "semantic_qc_policy"
+    ] = {
+        "version":
+            "safe_fallback_v2",
+
+        "allowed_exit_character_ids":
+            allowed_exit_ids,
+    }
+
+    scene.pop(
+        "video",
+        None,
+    )
+
+    job.pop(
+        "assembly",
+        None,
+    )
+
+    output = job.get(
+        "output"
+    )
+
+    if isinstance(
+        output,
+        dict,
+    ):
+
+        output[
+            "base_video_file"
+        ] = None
+
+    return new_prompt
+
+
+def upgrade_safe_motion_policy_for_existing_video(
+    job: dict,
+    scene_id: int,
+) -> str:
+
+    scene = find_visual_scene(
+        job,
+        scene_id,
+    )
+
+    if scene is None:
+
+        raise RuntimeError(
+            f"Visual scene {scene_id} "
+            f"does not exist."
+        )
+
+    video = scene.get(
+        "video"
+    )
+
+    if not isinstance(
+        video,
+        dict,
+    ):
+
+        raise RuntimeError(
+            f"Scene {scene_id}: existing video "
+            f"is required for policy-only recovery."
+        )
+
+    allowed_exit_ids = (
+        infer_allowed_exit_character_ids(
+            job,
+            scene_id,
+        )
+    )
+
+    new_prompt = build_safe_motion_prompt(
+        job,
+        scene_id,
+    )
+
+    history = scene.setdefault(
+        "motion_prompt_history",
+        [],
+    )
+
+    history.append(
+        {
+            "timestamp":
+                utc_now_iso(),
+
+            "reason":
+                "upgrade_safe_fallback_policy_for_existing_video",
+
+            "strategy":
+                "safe_fallback_v2",
+
+            "old_motion_prompt":
+                scene.get(
+                    "motion_prompt",
+                    ""
+                ),
+
+            "new_motion_prompt":
+                new_prompt,
+
+            "allowed_exit_character_ids":
+                allowed_exit_ids,
+
+            "preserved_video_task_id":
+                video.get(
+                    "task_id"
+                ),
+        }
+    )
+
+    scene[
+        "motion_prompt"
+    ] = new_prompt
+
+    scene[
+        "motion_strategy"
+    ] = "safe_fallback_v2"
+
+    scene[
+        "semantic_qc_policy"
+    ] = {
+        "version":
+            "safe_fallback_v2",
+
+        "allowed_exit_character_ids":
+            allowed_exit_ids,
+    }
+
+    video[
+        "semantic_qc"
+    ] = {
+        "status":
+            "pending",
+    }
+
+    video.pop(
+        "trimmed",
+        None,
+    )
+
+    job.pop(
+        "assembly",
+        None,
+    )
+
+    output = job.get(
+        "output"
+    )
+
+    if isinstance(
+        output,
+        dict,
+    ):
+
+        output[
+            "base_video_file"
+        ] = None
+
+    return new_prompt
+
+
+def upgrade_local_fallback_policy_for_existing_video(
+    job: dict,
+    scene_id: int,
+) -> str:
+
+    scene = find_visual_scene(
+        job,
+        scene_id,
+    )
+
+    if scene is None:
+
+        raise RuntimeError(
+            f"Visual scene {scene_id} "
+            f"does not exist."
+        )
+
+    video = scene.get(
+        "video"
+    )
+
+    if not isinstance(
+        video,
+        dict,
+    ):
+
+        raise RuntimeError(
+            f"Scene {scene_id}: existing fallback video "
+            f"is required for policy-only recovery."
+        )
+
+    if scene.get(
+        "motion_strategy"
+    ) != "still_image_fallback_v1":
+
+        raise RuntimeError(
+            f"Scene {scene_id}: motion strategy is not "
+            f"still_image_fallback_v1."
+        )
+
+    new_prompt = (
+        "Deterministic static hold on the approved source image. "
+        "No independent character or object motion is required. "
+        "An imperceptible or extremely subtle camera push-in is "
+        "acceptable but not required to be visually detectable. "
+        "All characters, props, clothing, anatomy, background, "
+        "and composition remain stable. No character duplication, "
+        "no scene change, and no morphing."
+    )
+
+    history = scene.setdefault(
+        "motion_prompt_history",
+        [],
+    )
+
+    history.append(
+        {
+            "timestamp":
+                utc_now_iso(),
+
+            "reason":
+                "upgrade_local_fallback_semantic_policy",
+
+            "strategy":
+                "still_image_fallback_v1",
+
+            "old_motion_prompt":
+                scene.get(
+                    "motion_prompt",
+                    ""
+                ),
+
+            "new_motion_prompt":
+                new_prompt,
+
+            "preserved_video_task_id":
+                video.get(
+                    "task_id"
+                ),
+
+            "video_regenerated":
+                False,
+        }
+    )
+
+    scene[
+        "motion_prompt"
+    ] = new_prompt
+
+    scene[
+        "semantic_qc_policy"
+    ] = {
+        "version":
+            "still_image_fallback_v2",
+
+        "motion_mode":
+            "static_hold",
+
+        "allowed_exit_character_ids":
+            [],
+    }
+
+    video[
+        "semantic_qc"
+    ] = {
+        "status":
+            "pending",
+    }
+
+    video.pop(
+        "trimmed",
+        None,
+    )
+
+    job.pop(
+        "assembly",
+        None,
+    )
+
+    output = job.get(
+        "output"
+    )
+
+    if isinstance(
+        output,
+        dict,
+    ):
+
+        output[
+            "base_video_file"
+        ] = None
+
+    return new_prompt
 
 
 def image_is_generated(
@@ -526,6 +1230,69 @@ def choose_next_action(
         )
     )
 
+    # Repeated Runway recovery is exhausted. If the
+    # scene already used safe_fallback_v2, do not spend another
+    # vision pass trying to salvage a manually invalid artifact.
+    # Switch directly to the deterministic local fallback.
+
+    if (
+        video_semantic_qc
+        == "failed"
+        and state.get(
+            "motion_strategy"
+        )
+        == "safe_fallback_v2"
+    ):
+
+        return ACTION_LOCAL_VIDEO_FALLBACK
+
+    if (
+        video_semantic_qc
+        == "failed"
+        and state.get(
+            "motion_strategy"
+        )
+        == "still_image_fallback_v1"
+    ):
+
+        if (
+            state.get(
+                "semantic_motion_mode"
+            )
+            == "static_hold"
+            and state.get(
+                "video_semantic_qc_policy_version"
+            )
+            == VIDEO_SEMANTIC_QC_POLICY_VERSION
+        ):
+
+            return ACTION_STOP_VIDEO
+
+        return ACTION_UPGRADE_LOCAL_FALLBACK_POLICY
+
+    # A failed semantic result from an older QC policy must be
+    # re-evaluated before spending another provider attempt.
+
+    if (
+        video_semantic_qc
+        == "failed"
+        and state.get(
+            "video_semantic_qc_policy_version"
+        )
+        != VIDEO_SEMANTIC_QC_POLICY_VERSION
+    ):
+
+        if state.get(
+            "motion_strategy"
+        ) in {
+            "safe_fallback_v1",
+            "safe_fallback_v2",
+        }:
+
+            return ACTION_UPGRADE_SAFE_MOTION_POLICY
+
+        return ACTION_VIDEO_SEMANTIC_QC
+
     if (
         video_semantic_qc
         == "passed"
@@ -551,6 +1318,46 @@ def choose_next_action(
     ):
 
         if (
+            state.get(
+                "motion_strategy"
+            )
+            == "safe_fallback_v1"
+        ):
+
+            return ACTION_UPGRADE_SAFE_MOTION_POLICY
+
+        if (
+            state.get(
+                "motion_strategy"
+            )
+            == "safe_fallback_v2"
+        ):
+
+            return ACTION_LOCAL_VIDEO_FALLBACK
+
+        if (
+            state.get(
+                "motion_strategy"
+            )
+            == "still_image_fallback_v1"
+        ):
+
+            if (
+                state.get(
+                    "semantic_motion_mode"
+                )
+                == "static_hold"
+                and state.get(
+                    "video_semantic_qc_policy_version"
+                )
+                == VIDEO_SEMANTIC_QC_POLICY_VERSION
+            ):
+
+                return ACTION_STOP_VIDEO
+
+            return ACTION_UPGRADE_LOCAL_FALLBACK_POLICY
+
+        if (
             video_attempts
             >= max_video_attempts
         ):
@@ -559,7 +1366,7 @@ def choose_next_action(
 
         # First generated video failed semantic QC.
         #
-        # Retry using the semantic QC feedback.
+        # Retry once using semantic QC feedback.
 
         if video_attempts <= 1:
 
@@ -567,12 +1374,14 @@ def choose_next_action(
                 ACTION_RETRY_VIDEO_FROM_QC
             )
 
-        # Second generated video also failed.
-        #
-        # Do not blindly retry the same strategy.
-        # Generate a simpler motion prompt.
+        # A second semantic failure means the motion
+        # strategy itself is too fragile. Do not ask
+        # another model for another potentially complex
+        # motion plan. Switch to a deterministic,
+        # locked-camera safe fallback for the final
+        # allowed generation attempt.
 
-        return ACTION_REGENERATE_MOTION
+        return ACTION_SAFE_MOTION_FALLBACK
 
     return ACTION_VIDEO_SEMANTIC_QC
 
@@ -1107,7 +1916,7 @@ def print_scene_state(
 def main() -> int:
 
     print("=" * 60)
-    print("VIDEO FACTORY - SCENE ORCHESTRATOR v4")
+    print("VIDEO FACTORY - SCENE ORCHESTRATOR v8")
     print("=" * 60)
 
     args = parse_args()
@@ -2085,76 +2894,45 @@ def main() -> int:
             continue
 
         # =================================================
-        # SECOND VIDEO SEMANTIC FAILURE
+        # UPGRADE LEGACY SAFE FALLBACK POLICY
         # =================================================
 
         if (
             action
-            == ACTION_REGENERATE_MOTION
+            == ACTION_UPGRADE_SAFE_MOTION_POLICY
         ):
 
             print(
-                "\nVideo semantic QC failed again."
+                "\nUpgrading safe fallback policy "
+                "without regenerating the video."
             )
 
-            print(
-                "Strategy change: regenerate "
-                "a simpler motion prompt."
-            )
+            try:
 
-            record_orchestration_result(
-                job,
-                args.scene,
-                state,
-                action=
-                    ACTION_REGENERATE_MOTION,
-                result="started",
-            )
-
-            save_job_atomic(
-                job
-            )
-
-            rc = run_worker(
-                "visual_prompt_generator.py",
-                [
-                    "--scene",
-                    str(
-                        args.scene
-                    ),
-
-                    "--motion-only",
-
-                    "--force",
-                ],
-            )
-
-            if rc != 0:
-
-                job = load_json(
-                    JOB_FILE
-                )
-
-                new_state = (
-                    inspect_scene_state(
+                upgraded_prompt = (
+                    upgrade_safe_motion_policy_for_existing_video(
                         job,
                         args.scene,
                     )
                 )
 
+            except Exception as exc:
+
                 record_orchestration_result(
                     job,
                     args.scene,
-                    new_state,
+                    state,
                     action=
-                        ACTION_REGENERATE_MOTION,
+                        ACTION_UPGRADE_SAFE_MOTION_POLICY,
                     result=
-                        "worker_failed",
+                        "upgrade_failed",
                     orchestration_state=
                         "failed",
                     details={
-                        "return_code":
-                            rc,
+                        "error":
+                            str(
+                                exc
+                            ),
                     },
                 )
 
@@ -2163,21 +2941,13 @@ def main() -> int:
                 )
 
                 print(
-                    "\nERROR: motion-only prompt "
-                    "regeneration failed."
+                    f"\nERROR upgrading safe "
+                    f"motion policy:\n{exc}"
                 )
 
                 return 1
 
-            # Motion-only has invalidated the old video.
-            # Reload before counting the next expensive
-            # generation attempt.
-
-            job = load_json(
-                JOB_FILE
-            )
-
-            new_state = (
+            upgraded_state = (
                 inspect_scene_state(
                     job,
                     args.scene,
@@ -2187,13 +2957,109 @@ def main() -> int:
             record_orchestration_result(
                 job,
                 args.scene,
-                new_state,
+                upgraded_state,
                 action=
-                    ACTION_REGENERATE_MOTION,
-                result="completed",
+                    ACTION_UPGRADE_SAFE_MOTION_POLICY,
+                result="applied",
                 details={
-                    "return_code":
-                        rc,
+                    "motion_prompt":
+                        upgraded_prompt,
+
+                    "video_regenerated":
+                        False,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            print(
+                f"  Updated prompt: "
+                f"{upgraded_prompt}"
+            )
+
+            print(
+                "  Existing Runway video preserved."
+            )
+
+            continue
+
+        # =================================================
+        # REPEATED VIDEO SEMANTIC FAILURE
+        # =================================================
+
+        if (
+            action
+            == ACTION_SAFE_MOTION_FALLBACK
+        ):
+
+            print(
+                "\nVideo semantic QC failed again."
+            )
+
+            print(
+                "Strategy change: deterministic "
+                "safe motion fallback."
+            )
+
+            try:
+
+                safe_prompt = (
+                    apply_safe_motion_fallback(
+                        job,
+                        args.scene,
+                    )
+                )
+
+            except Exception as exc:
+
+                record_orchestration_result(
+                    job,
+                    args.scene,
+                    state,
+                    action=
+                        ACTION_SAFE_MOTION_FALLBACK,
+                    result=
+                        "fallback_failed",
+                    orchestration_state=
+                        "failed",
+                    details={
+                        "error":
+                            str(
+                                exc
+                            ),
+                    },
+                )
+
+                save_job_atomic(
+                    job
+                )
+
+                print(
+                    f"\nERROR applying safe "
+                    f"motion fallback:\n{exc}"
+                )
+
+                return 1
+
+            fallback_state = (
+                inspect_scene_state(
+                    job,
+                    args.scene,
+                )
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                fallback_state,
+                action=
+                    ACTION_SAFE_MOTION_FALLBACK,
+                result="applied",
+                details={
+                    "motion_prompt":
+                        safe_prompt,
                 },
             )
 
@@ -2201,16 +3067,20 @@ def main() -> int:
                 start_generation_attempt(
                     job,
                     args.scene,
-                    new_state,
+                    fallback_state,
                     counter_name=
                         "video_attempts",
                     action=
-                        ACTION_GENERATE_VIDEO,
+                        ACTION_SAFE_MOTION_FALLBACK,
                 )
             )
 
             save_job_atomic(
                 job
+            )
+
+            print(
+                f"  Safe prompt: {safe_prompt}"
             )
 
             print(
@@ -2247,7 +3117,7 @@ def main() -> int:
                 args.scene,
                 final_state,
                 action=
-                    ACTION_GENERATE_VIDEO,
+                    ACTION_SAFE_MOTION_FALLBACK,
                 result=(
                     "completed"
                     if rc == 0
@@ -2258,8 +3128,8 @@ def main() -> int:
                         rc,
                     "attempt":
                         current_attempt,
-                    "after_motion_regeneration":
-                        True,
+                    "strategy":
+                        "safe_fallback_v1",
                 },
             )
 
@@ -2271,8 +3141,192 @@ def main() -> int:
 
                 print(
                     "\nERROR: video generation "
-                    "after motion regeneration "
-                    "failed."
+                    "with safe motion fallback failed."
+                )
+
+                return 1
+
+            continue
+
+        # =================================================
+        # UPGRADE LOCAL FALLBACK SEMANTIC POLICY
+        # =================================================
+
+        if (
+            action
+            == ACTION_UPGRADE_LOCAL_FALLBACK_POLICY
+        ):
+
+            print(
+                "\nUpgrading deterministic fallback "
+                "semantic policy without regenerating video."
+            )
+
+            try:
+
+                updated_prompt = (
+                    upgrade_local_fallback_policy_for_existing_video(
+                        job,
+                        args.scene,
+                    )
+                )
+
+            except Exception as exc:
+
+                record_orchestration_result(
+                    job,
+                    args.scene,
+                    state,
+                    action=
+                        ACTION_UPGRADE_LOCAL_FALLBACK_POLICY,
+                    result=
+                        "upgrade_failed",
+                    orchestration_state=
+                        "failed",
+                    details={
+                        "error":
+                            str(
+                                exc
+                            ),
+                    },
+                )
+
+                save_job_atomic(
+                    job
+                )
+
+                print(
+                    f"\nERROR upgrading local "
+                    f"fallback policy:\n{exc}"
+                )
+
+                return 1
+
+            upgraded_state = (
+                inspect_scene_state(
+                    job,
+                    args.scene,
+                )
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                upgraded_state,
+                action=
+                    ACTION_UPGRADE_LOCAL_FALLBACK_POLICY,
+                result="applied",
+                details={
+                    "motion_prompt":
+                        updated_prompt,
+
+                    "video_regenerated":
+                        False,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            print(
+                f"  Updated prompt: "
+                f"{updated_prompt}"
+            )
+
+            print(
+                "  Existing local fallback video preserved."
+            )
+
+            continue
+
+        # =================================================
+        # LOCAL DETERMINISTIC VIDEO FALLBACK
+        # =================================================
+
+        if (
+            action
+            == ACTION_LOCAL_VIDEO_FALLBACK
+        ):
+
+            print(
+                "\nRunway recovery exhausted."
+            )
+
+            print(
+                "Strategy change: deterministic "
+                "local still-image video fallback."
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                state,
+                action=
+                    ACTION_LOCAL_VIDEO_FALLBACK,
+                result="started",
+                details={
+                    "video_attempts":
+                        video_attempts,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            rc = run_worker(
+                "scene_video_fallback.py",
+                [
+                    "--scene",
+                    str(
+                        args.scene
+                    ),
+
+                    "--force",
+                ],
+            )
+
+            job = load_json(
+                JOB_FILE
+            )
+
+            fallback_state = (
+                inspect_scene_state(
+                    job,
+                    args.scene,
+                )
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                fallback_state,
+                action=
+                    ACTION_LOCAL_VIDEO_FALLBACK,
+                result=(
+                    "completed"
+                    if rc == 0
+                    else "worker_failed"
+                ),
+                details={
+                    "return_code":
+                        rc,
+
+                    "runway_attempts_preserved":
+                        video_attempts,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            if rc != 0:
+
+                print(
+                    "\nERROR: local deterministic "
+                    "video fallback failed."
                 )
 
                 return 1

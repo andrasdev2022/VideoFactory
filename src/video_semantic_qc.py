@@ -59,6 +59,11 @@ LOW_CONFIDENCE_WARNING = float(
 )
 
 
+QC_POLICY_VERSION = (
+    "target_window_v4_static_fallback"
+)
+
+
 # ---------------------------------------------------------
 # STRUCTURED OUTPUT
 # ---------------------------------------------------------
@@ -68,6 +73,11 @@ class CharacterVideoQC(BaseModel):
     character_id: str
 
     present_throughout: bool
+
+    max_visible_instances: int = Field(
+        ge=0,
+        le=10,
+    )
 
     identity_stable: bool
 
@@ -136,6 +146,11 @@ MOTION
 - Does the chronological frame sequence appear consistent with
   the requested motion?
 - Does the action meaningfully progress in the intended direction?
+- If semantic_qc_policy.motion_mode is "static_hold", visible motion
+  is NOT required. A stable hold on the approved source image is an
+  acceptable result. An imperceptible or extremely subtle push-in may
+  be present, but do not fail the video merely because sampled frames
+  appear visually identical.
 
 TEMPORAL COHERENCE
 - Do frames form one coherent continuous shot?
@@ -150,7 +165,17 @@ SOURCE FRAME CONTINUITY
 
 CHARACTER CONSISTENCY
 For every expected character:
+- Report max_visible_instances: the maximum number of simultaneously
+  visible instances of that expected character in any supplied sample.
+  A duplicated main character means max_visible_instances > 1.
+  Do not treat a duplicate of an expected character as a harmless
+  background extra.
 - Is the character present when expected?
+- If semantic_qc_policy.allowed_exit_character_ids contains a
+  character, that character may leave frame naturally as part of the
+  approved action and does not need to remain present through the final
+  sample. Judge identity/appearance/clothing stability only while the
+  character is visible.
 - Does identity remain stable across the sampled frames?
 - Do face, species, fur, hair and defining physical traits remain
   stable?
@@ -526,6 +551,58 @@ def get_actual_duration(
     )
 
 
+def get_evaluation_duration(
+    scene: dict,
+) -> float:
+
+    actual_duration = (
+        get_actual_duration(
+            scene
+        )
+    )
+
+    target_duration = (
+        scene
+        .get(
+            "video",
+            {},
+        )
+        .get(
+            "target_render_duration_sec"
+        )
+    )
+
+    if target_duration is None:
+
+        return actual_duration
+
+    try:
+
+        target_duration = float(
+            target_duration
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+
+        return actual_duration
+
+    if target_duration <= 0:
+
+        return actual_duration
+
+    # Semantic QC must evaluate only the time window that will
+    # survive exact trimming. Provider tail frames are irrelevant
+    # to the final video and must not fail the scene.
+
+    return min(
+        actual_duration,
+        target_duration,
+    )
+
+
 # ---------------------------------------------------------
 # FRAME TIMESTAMPS
 # ---------------------------------------------------------
@@ -599,7 +676,7 @@ def extract_frames(
         / video_file
     )
 
-    duration = get_actual_duration(
+    duration = get_evaluation_duration(
         scene
     )
 
@@ -767,6 +844,12 @@ def build_context(
         "image_prompt":
             scene.get(
                 "image_prompt"
+            ),
+
+        "semantic_qc_policy":
+            scene.get(
+                "semantic_qc_policy",
+                {},
             ),
 
         "expected_characters":
@@ -1025,18 +1108,54 @@ def evaluate_result(
     errors: list[str] = []
     warnings: list[str] = []
 
+    motion_mode = (
+        scene
+        .get(
+            "semantic_qc_policy",
+            {},
+        )
+        .get(
+            "motion_mode"
+        )
+    )
+
+    static_hold = (
+        motion_mode
+        == "static_hold"
+    )
+
     if not result.motion_matches_prompt:
 
-        errors.append(
-            "Video motion does not sufficiently "
-            "match motion_prompt."
-        )
+        if static_hold:
+
+            warnings.append(
+                "Visible motion was not detected, which is "
+                "acceptable for the deterministic static-hold "
+                "fallback."
+            )
+
+        else:
+
+            errors.append(
+                "Video motion does not sufficiently "
+                "match motion_prompt."
+            )
 
     if not result.temporal_progression_coherent:
 
-        errors.append(
-            "Video does not show coherent temporal progression."
-        )
+        if static_hold:
+
+            warnings.append(
+                "No active temporal progression was detected, "
+                "which is acceptable for the deterministic "
+                "static-hold fallback."
+            )
+
+        else:
+
+            errors.append(
+                "Video does not show coherent temporal progression."
+            )
 
     if not result.source_frame_continuity_ok:
 
@@ -1091,6 +1210,19 @@ def evaluate_result(
         )
     )
 
+    allowed_exit_ids = set(
+        scene
+        .get(
+            "semantic_qc_policy",
+            {},
+        )
+        .get(
+            "allowed_exit_character_ids",
+            [],
+        )
+        or []
+    )
+
     actual_ids = {
         character.character_id
         for character
@@ -1118,12 +1250,39 @@ def evaluate_result(
         if character.character_id not in expected_ids:
             continue
 
-        if not character.present_throughout:
+        if (
+            character.max_visible_instances
+            > 1
+        ):
 
             errors.append(
                 prefix
-                + "character is not consistently present."
+                + (
+                    "duplicated main character detected "
+                    f"({character.max_visible_instances} "
+                    "simultaneous instances)."
+                )
             )
+
+        if not character.present_throughout:
+
+            if (
+                character.character_id
+                in allowed_exit_ids
+            ):
+
+                warnings.append(
+                    prefix
+                    + "character leaves frame under "
+                    "the approved scene-exit policy."
+                )
+
+            else:
+
+                errors.append(
+                    prefix
+                    + "character is not consistently present."
+                )
 
         if not character.identity_stable:
 
@@ -1212,6 +1371,25 @@ def apply_result(
                 timezone.utc
             ).isoformat(),
 
+        "policy_version":
+            QC_POLICY_VERSION,
+
+        "raw_duration_sec":
+            round(
+                get_actual_duration(
+                    scene
+                ),
+                3,
+            ),
+
+        "evaluation_duration_sec":
+            round(
+                get_evaluation_duration(
+                    scene
+                ),
+                3,
+            ),
+
         "model":
             VISION_MODEL,
 
@@ -1267,6 +1445,12 @@ def apply_result(
 
         "overall_notes":
             result.overall_notes,
+
+        "applied_policy":
+            scene.get(
+                "semantic_qc_policy",
+                {},
+            ),
 
         "errors":
             errors,
@@ -1381,7 +1565,7 @@ def cleanup_frames(
 def main() -> int:
 
     print("=" * 60)
-    print("VIDEO FACTORY - VIDEO SEMANTIC QC v1")
+    print("VIDEO FACTORY - VIDEO SEMANTIC QC v5")
     print("=" * 60)
 
     args = parse_args()
@@ -1744,6 +1928,11 @@ def main() -> int:
             print(
                 f"    present:    "
                 f"{character.present_throughout}"
+            )
+
+            print(
+                f"    instances:  "
+                f"{character.max_visible_instances}"
             )
 
             print(
