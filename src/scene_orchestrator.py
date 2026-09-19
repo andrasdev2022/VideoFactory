@@ -53,6 +53,10 @@ ACTION_GENERATE_VIDEO = (
     "generate_video"
 )
 
+ACTION_STOP_TIMING = (
+    "stop_timing_not_ready"
+)
+
 ACTION_VIDEO_QC = (
     "video_qc"
 )
@@ -220,6 +224,23 @@ def inspect_scene_state(
             f"does not exist."
         )
 
+    script_scene = find_script_scene(
+        job,
+        scene_id,
+    )
+
+    if script_scene is None:
+
+        raise RuntimeError(
+            f"Script scene {scene_id} "
+            f"does not exist."
+        )
+
+    timing = script_scene.get(
+        "timing",
+        {},
+    )
+
     image = scene.get(
         "image",
         {},
@@ -251,6 +272,22 @@ def inspect_scene_state(
     )
 
     return {
+
+        "timing_status":
+            timing.get(
+                "status"
+            ),
+
+        "render_duration_sec":
+            timing.get(
+                "render_duration_sec"
+            ),
+
+        "script_revision_required":
+            timing.get(
+                "script_revision_required",
+                False,
+            ),
 
         "image_status":
             image.get(
@@ -331,6 +368,23 @@ def choose_next_action(
     max_image_attempts: int,
     max_video_attempts: int,
 ) -> str:
+
+    # =====================================================
+    # TIMING GATE
+    # =====================================================
+
+    if (
+        state.get(
+            "timing_status"
+        )
+        != "passed"
+        or state.get(
+            "render_duration_sec"
+        )
+        is None
+    ):
+
+        return ACTION_STOP_TIMING
 
     # =====================================================
     # IMAGE
@@ -974,6 +1028,16 @@ def print_scene_state(
     )
 
     print(
+        f"  timing:            "
+        f"{state.get('timing_status')}"
+    )
+
+    print(
+        f"  render duration:   "
+        f"{state.get('render_duration_sec')}"
+    )
+
+    print(
         f"  image:             "
         f"{state.get('image_status')}"
     )
@@ -1007,7 +1071,7 @@ def print_scene_state(
 def main() -> int:
 
     print("=" * 60)
-    print("VIDEO FACTORY - SCENE ORCHESTRATOR v2")
+    print("VIDEO FACTORY - SCENE ORCHESTRATOR v3")
     print("=" * 60)
 
     args = parse_args()
@@ -1276,6 +1340,64 @@ def main() -> int:
             )
 
             return 0
+
+        # =================================================
+        # STOP TIMING
+        # =================================================
+
+        if (
+            action
+            == ACTION_STOP_TIMING
+        ):
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                state,
+                action=ACTION_STOP_TIMING,
+                result="timing_not_ready",
+                orchestration_state=
+                    "failed",
+                details={
+                    "timing_status":
+                        state.get(
+                            "timing_status"
+                        ),
+                    "render_duration_sec":
+                        state.get(
+                            "render_duration_sec"
+                        ),
+                    "script_revision_required":
+                        state.get(
+                            "script_revision_required",
+                            False,
+                        ),
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            print_scene_state(
+                state
+            )
+
+            print(
+                f"\nERROR: Scene {args.scene} "
+                f"cannot continue to image/video generation "
+                f"until natural voice timing has passed."
+            )
+
+            if state.get(
+                "script_revision_required"
+            ):
+
+                print(
+                    "Script revision is required first."
+                )
+
+            return 1
 
         # =================================================
         # STOP IMAGE
