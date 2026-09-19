@@ -149,6 +149,12 @@ $env:SCENE_TRIM_DURATION_TOLERANCE_SEC = "0.08"
 $env:SCENE_TRIM_CRF = "18"
 $env:SCENE_TRIM_PRESET = "medium"
 
+$env:BASE_ASSEMBLY_DURATION_TOLERANCE_SEC = "0.15"
+$env:BASE_ASSEMBLY_CRF = "16"
+$env:BASE_ASSEMBLY_PRESET = "medium"
+$env:BASE_ASSEMBLY_AUDIO_SAMPLE_RATE = "48000"
+$env:BASE_ASSEMBLY_AUDIO_BITRATE = "192k"
+
 
 # ------------------------------------------------------------
 # IMAGE QC
