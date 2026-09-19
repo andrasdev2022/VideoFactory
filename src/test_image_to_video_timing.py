@@ -102,6 +102,97 @@ class ImageToVideoTimingTests(
             )
 
 
+    def test_cached_video_from_other_provider_is_stale(
+        self,
+    ):
+
+        with tempfile.TemporaryDirectory() as directory:
+
+            old_root = (
+                image_to_video_generator
+                .PROJECT_ROOT
+            )
+
+            try:
+
+                image_to_video_generator.PROJECT_ROOT = (
+                    Path(
+                        directory
+                    )
+                )
+
+                output_file = (
+                    Path(
+                        directory
+                    )
+                    / "output"
+                    / "job"
+                    / "videos"
+                    / "scene_002.mp4"
+                )
+
+                output_file.parent.mkdir(
+                    parents=True,
+                    exist_ok=True,
+                )
+
+                output_file.write_bytes(
+                    b"video"
+                )
+
+                scene = {
+                    "video": {
+                        "status":
+                            "generated",
+
+                        "file": (
+                            "output/job/videos/"
+                            "scene_002.mp4"
+                        ),
+
+                        "provider":
+                            "runway",
+
+                        "provider_duration_sec":
+                            3.0,
+
+                        "target_render_duration_sec":
+                            2.75,
+
+                        "source_image":
+                            "scene.png",
+                    },
+                }
+
+                self.assertFalse(
+                    video_metadata_matches_current_request(
+                        scene=scene,
+                        output_file=output_file,
+                        render_duration_sec=2.75,
+                        provider_duration_sec=3.0,
+                        source_image="scene.png",
+                        provider="local_ltx",
+                    )
+                )
+
+                self.assertTrue(
+                    video_metadata_matches_current_request(
+                        scene=scene,
+                        output_file=output_file,
+                        render_duration_sec=2.75,
+                        provider_duration_sec=3.0,
+                        source_image="scene.png",
+                        provider="runway",
+                    )
+                )
+
+            finally:
+
+                image_to_video_generator.PROJECT_ROOT = (
+                    old_root
+                )
+
+
     def test_stale_metadata_does_not_match(
         self,
     ):
