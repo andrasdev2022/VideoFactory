@@ -1521,6 +1521,29 @@ def write_subtitle_files(
             "video_file"
         ] = None
 
+    audio = job.get(
+        "audio"
+    )
+
+    if isinstance(
+        audio,
+        dict,
+    ):
+
+        audio.pop(
+            "mix",
+            None,
+        )
+
+    if isinstance(
+        output,
+        dict,
+    ):
+
+        output[
+            "mixed_video_file"
+        ] = None
+
     job.pop(
         "final_mix",
         None,
