@@ -1718,6 +1718,24 @@ def apply_rewrite(
         None,
     )
 
+    job.pop(
+        "assembly",
+        None,
+    )
+
+    output = job.get(
+        "output"
+    )
+
+    if isinstance(
+        output,
+        dict,
+    ):
+
+        output[
+            "base_video_file"
+        ] = None
+
     return changed_scene_ids
 
 
