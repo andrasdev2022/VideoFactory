@@ -242,7 +242,8 @@ def get_output_path(
         / "videos"
         / (
             f"scene_"
-            f"{scene_id:03d}.mp4"
+            f"{scene_id:03d}"
+            f"_fallback.mp4"
         )
     )
 
