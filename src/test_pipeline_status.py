@@ -385,6 +385,118 @@ class PipelineStatusTests(
         )
 
 
+    def test_one_trimmed_scene_is_partial(
+        self,
+    ):
+
+        job = make_job()
+
+        scene2 = (
+            job["visuals"]["scenes"][1]
+        )
+
+        scene2["video"] = {
+            "status":
+                "generated",
+
+            "file":
+                "scene_002.mp4",
+
+            "trimmed": {
+                "status":
+                    "passed",
+
+                "file":
+                    "trimmed/scene_002.mp4",
+            },
+        }
+
+        status = (
+            refresh_pipeline_status(
+                job
+            )
+        )
+
+        summary = status[
+            "scene_trimmed"
+        ]
+
+        self.assertEqual(
+            summary["state"],
+            "partial",
+        )
+
+        self.assertEqual(
+            summary["ready"],
+            1,
+        )
+
+        self.assertEqual(
+            summary["pending"],
+            2,
+        )
+
+
+    def test_all_trimmed_scenes_complete(
+        self,
+    ):
+
+        job = make_job()
+
+        for scene in (
+            job["visuals"]["scenes"]
+        ):
+
+            scene_id = scene[
+                "scene_id"
+            ]
+
+            scene["video"] = {
+                "status":
+                    "generated",
+
+                "file":
+                    (
+                        f"scene_"
+                        f"{scene_id:03d}.mp4"
+                    ),
+
+                "trimmed": {
+                    "status":
+                        "passed",
+
+                    "file":
+                        (
+                            "trimmed/"
+                            f"scene_{scene_id:03d}.mp4"
+                        ),
+                },
+            }
+
+        legacy = (
+            set_legacy_status_from_stage(
+                job,
+                "scene_trimmed",
+            )
+        )
+
+        self.assertEqual(
+            legacy,
+            "scene_trimmed_passed",
+        )
+
+        self.assertEqual(
+            job[
+                "pipeline_status"
+            ][
+                "scene_trimmed"
+            ][
+                "state"
+            ],
+            "completed",
+        )
+
+
     def test_legacy_status_updates_current_stage(
         self,
     ):
