@@ -55,6 +55,10 @@ Rules:
 - volume must be between 0.10 and 1.00.
 - Effects must contain no dialogue, music, brands, or copyrighted audio.
 - Prefer simple isolated effects that a text-to-SFX model can generate.
+- The supplied final-video state is authoritative over script intentions.
+- If a scene has sfx_allowed=false or motion_mode=static_hold, do not
+  create an action sound effect for that scene; the final video does
+  not visibly perform the scripted action.
 - Do not add an effect merely because a scene exists.
 """.strip()
 
@@ -100,6 +104,112 @@ def save_job_atomic(
     )
 
 
+def find_visual_scene(
+    job: dict,
+    scene_id: int,
+) -> dict[str, Any] | None:
+
+    for scene in (
+        job
+        .get(
+            "visuals",
+            {},
+        )
+        .get(
+            "scenes",
+            [],
+        )
+    ):
+
+        if scene.get(
+            "scene_id"
+        ) == scene_id:
+
+            return scene
+
+    return None
+
+
+def is_static_hold_scene(
+    job: dict,
+    scene_id: int,
+) -> bool:
+
+    scene = find_visual_scene(
+        job,
+        scene_id,
+    )
+
+    if scene is None:
+
+        return False
+
+    motion_mode = (
+        scene
+        .get(
+            "semantic_qc_policy",
+            {},
+        )
+        .get(
+            "motion_mode"
+        )
+    )
+
+    if motion_mode == "static_hold":
+
+        return True
+
+    return (
+        scene.get(
+            "motion_strategy"
+        )
+        == "still_image_fallback_v1"
+    )
+
+
+def filter_effects_for_final_video(
+    job: dict,
+    effects: list[SoundEffectPlan],
+) -> tuple[
+    list[SoundEffectPlan],
+    list[dict[str, Any]],
+]:
+
+    kept: list[SoundEffectPlan] = []
+    skipped: list[dict[str, Any]] = []
+
+    for effect in effects:
+
+        if is_static_hold_scene(
+            job,
+            effect.scene_id,
+        ):
+
+            skipped.append(
+                {
+                    "scene_id":
+                        effect.scene_id,
+
+                    "effect":
+                        effect.effect,
+
+                    "reason":
+                        "final_video_static_hold",
+                }
+            )
+
+            continue
+
+        kept.append(
+            effect
+        )
+
+    return (
+        kept,
+        skipped,
+    )
+
+
 def build_context(
     job: dict,
 ) -> dict[str, Any]:
@@ -123,12 +233,51 @@ def build_context(
             {},
         )
 
+        scene_id = scene.get(
+            "scene_id"
+        )
+
+        visual_scene = (
+            find_visual_scene(
+                job,
+                int(
+                    scene_id
+                ),
+            )
+            if scene_id
+            is not None
+            else None
+        )
+
+        final_video = (
+            visual_scene.get(
+                "video",
+                {},
+            )
+            if visual_scene
+            is not None
+            else {}
+        )
+
+        semantic_qc = final_video.get(
+            "semantic_qc",
+            {},
+        )
+
+        semantic_policy = (
+            visual_scene.get(
+                "semantic_qc_policy",
+                {},
+            )
+            if visual_scene
+            is not None
+            else {}
+        )
+
         scenes.append(
             {
                 "scene_id":
-                    scene.get(
-                        "scene_id"
-                    ),
+                    scene_id,
 
                 "type":
                     scene.get(
@@ -160,6 +309,54 @@ def build_context(
                     scene.get(
                         "visual",
                         {},
+                    ),
+
+                "final_motion_prompt":
+                    (
+                        visual_scene.get(
+                            "motion_prompt"
+                        )
+                        if visual_scene
+                        is not None
+                        else None
+                    ),
+
+                "motion_strategy":
+                    (
+                        visual_scene.get(
+                            "motion_strategy"
+                        )
+                        if visual_scene
+                        is not None
+                        else None
+                    ),
+
+                "motion_mode":
+                    semantic_policy.get(
+                        "motion_mode"
+                    ),
+
+                "sfx_allowed":
+                    (
+                        not is_static_hold_scene(
+                            job,
+                            int(
+                                scene_id
+                            ),
+                        )
+                        if scene_id
+                        is not None
+                        else True
+                    ),
+
+                "final_video_provider":
+                    final_video.get(
+                        "provider"
+                    ),
+
+                "final_video_semantic_notes":
+                    semantic_qc.get(
+                        "overall_notes"
                     ),
             }
         )
@@ -319,6 +516,9 @@ def validate_audio_plan(
 def apply_audio_plan(
     job: dict,
     output: AudioPlanOutput,
+    skipped_effects: list[
+        dict[str, Any]
+    ] | None = None,
 ) -> None:
 
     audio = job.setdefault(
@@ -380,6 +580,11 @@ def apply_audio_plan(
         in output.effects
     ]
 
+    skipped_effects = (
+        skipped_effects
+        or []
+    )
+
     audio[
         "plan"
     ] = {
@@ -398,6 +603,14 @@ def apply_audio_plan(
             len(
                 output.effects
             ),
+
+        "skipped_effect_count":
+            len(
+                skipped_effects
+            ),
+
+        "skipped_effects":
+            skipped_effects,
     }
 
     audio.pop(
@@ -552,6 +765,22 @@ def main() -> int:
                 "Audio planner returned no parsed output."
             )
 
+        (
+            filtered_effects,
+            skipped_effects,
+        ) = filter_effects_for_final_video(
+            job,
+            result.effects,
+        )
+
+        result = AudioPlanOutput(
+            background_music_style=
+                result.background_music_style,
+
+            effects=
+                filtered_effects,
+        )
+
         errors = validate_audio_plan(
             job,
             result,
@@ -567,6 +796,8 @@ def main() -> int:
         apply_audio_plan(
             job,
             result,
+            skipped_effects=
+                skipped_effects,
         )
 
         save_job_atomic(
@@ -616,6 +847,28 @@ def main() -> int:
                 f"  scene {effect['scene_id']} "
                 f"+{effect['offset_sec']:.3f}s: "
                 f"{effect['effect']}"
+            )
+        )
+
+    skipped_effects = (
+        job[
+            "audio"
+        ][
+            "plan"
+        ].get(
+            "skipped_effects",
+            [],
+        )
+    )
+
+    for effect in skipped_effects:
+
+        print(
+            (
+                "  [WARNING] Skipped SFX for "
+                f"scene {effect['scene_id']}: "
+                f"{effect['effect']} "
+                f"({effect['reason']})"
             )
         )
 
