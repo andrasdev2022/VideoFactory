@@ -20,6 +20,7 @@ PIPELINE_STAGES = (
     "scene_timing",
     "global_timing",
     "base_assembly",
+    "subtitles",
 )
 
 def _make_summary(
@@ -631,6 +632,95 @@ def _compute_base_assembly_status(
     )
 
 
+def _compute_subtitles_status(
+    job: dict,
+) -> dict[str, Any]:
+
+    subtitles = job.get(
+        "subtitles",
+        {},
+    )
+
+    if not subtitles.get(
+        "enabled",
+        True,
+    ):
+
+        return _make_summary(
+            total=1,
+            ready=1,
+        )
+
+    generation = subtitles.get(
+        "generation",
+        {},
+    )
+
+    render = subtitles.get(
+        "render",
+        {},
+    )
+
+    if generation.get(
+        "status"
+    ) == "failed":
+
+        return _make_summary(
+            total=1,
+            ready=0,
+            failed=1,
+        )
+
+    if generation.get(
+        "status"
+    ) != "passed":
+
+        return _make_summary(
+            total=1,
+            ready=0,
+        )
+
+    if not subtitles.get(
+        "burned_in",
+        True,
+    ):
+
+        return _make_summary(
+            total=1,
+            ready=1,
+        )
+
+    if render.get(
+        "status"
+    ) == "failed":
+
+        return _make_summary(
+            total=1,
+            ready=0,
+            failed=1,
+        )
+
+    if (
+        render.get(
+            "status"
+        )
+        == "passed"
+        and render.get(
+            "file"
+        )
+    ):
+
+        return _make_summary(
+            total=1,
+            ready=1,
+        )
+
+    return _make_summary(
+        total=1,
+        ready=0,
+    )
+
+
 def refresh_pipeline_status(
     job: dict,
 ) -> dict[str, Any]:
@@ -714,6 +804,11 @@ def refresh_pipeline_status(
 
         "base_assembly":
             _compute_base_assembly_status(
+                job
+            ),
+
+        "subtitles":
+            _compute_subtitles_status(
                 job
             ),
     }
@@ -892,6 +987,17 @@ def set_legacy_status_from_stage(
                 "base_assembly_passed",
             "failed":
                 "base_assembly_failed",
+        },
+
+        "subtitles": {
+            "pending":
+                "subtitles_pending",
+            "partial":
+                "subtitles_partial",
+            "completed":
+                "subtitles_passed",
+            "failed":
+                "subtitles_failed",
         },
     }
 
