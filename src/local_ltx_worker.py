@@ -125,7 +125,7 @@ def import_runtime():
     try:
 
         from diffusers import (
-            DiffusionPipeline,
+            LTXImageToVideoPipeline,
         )
 
         from diffusers.utils import (
@@ -144,7 +144,7 @@ def import_runtime():
 
     return (
         torch,
-        DiffusionPipeline,
+        LTXImageToVideoPipeline,
         export_to_video,
         load_image,
     )
@@ -345,7 +345,7 @@ def main() -> int:
         # RTX 20-series has no native BF16 tensor-core path.
         # FP16 is intentionally used for the Turing baseline.
         pipeline = (
-            DiffusionPipeline
+            LTXImageToVideoPipeline
             .from_pretrained(
                 args.model_id,
                 dtype=
