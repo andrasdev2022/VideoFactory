@@ -15,6 +15,7 @@ from scene_orchestrator import (
     ACTION_TRIM_VIDEO,
     ACTION_VIDEO_QC,
     ACTION_VIDEO_SEMANTIC_QC,
+    VIDEO_SEMANTIC_QC_POLICY_VERSION,
     apply_safe_motion_fallback,
     build_safe_motion_prompt,
     infer_allowed_exit_character_ids,
@@ -36,6 +37,8 @@ def make_state(
     video_file=None,
     video_qc=None,
     video_semantic_qc=None,
+    video_semantic_qc_policy_version=
+        VIDEO_SEMANTIC_QC_POLICY_VERSION,
     trimmed_status=None,
     trimmed_file=None,
     motion_strategy=None,
@@ -74,6 +77,9 @@ def make_state(
 
         "video_semantic_qc":
             video_semantic_qc,
+
+        "video_semantic_qc_policy_version":
+            video_semantic_qc_policy_version,
 
         "trimmed_status":
             trimmed_status,
@@ -330,6 +336,34 @@ class SceneOrchestratorTests(
         self.assertEqual(
             action,
             ACTION_TRIM_VIDEO,
+        )
+
+
+    def test_old_failed_semantic_qc_is_rechecked_without_generation(
+        self,
+    ):
+
+        action = self.choose(
+            make_state(
+                image_status="generated",
+                image_file="scene.png",
+                image_qc="passed",
+                image_semantic_qc="passed",
+
+                video_status="generated",
+                video_file="scene.mp4",
+                video_qc="passed",
+                video_semantic_qc="failed",
+                video_semantic_qc_policy_version=None,
+            ),
+            image_attempts=1,
+            video_attempts=4,
+            max_video_attempts=4,
+        )
+
+        self.assertEqual(
+            action,
+            ACTION_VIDEO_SEMANTIC_QC,
         )
 
 
