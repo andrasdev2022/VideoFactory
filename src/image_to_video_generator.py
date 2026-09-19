@@ -851,6 +851,27 @@ def generate_scene_video(
         },
     }
 
+    # A new raw scene video invalidates any previous
+    # trimmed/assembled downstream artifact chain.
+
+    job.pop(
+        "assembly",
+        None,
+    )
+
+    output = job.get(
+        "output"
+    )
+
+    if isinstance(
+        output,
+        dict,
+    ):
+
+        output[
+            "base_video_file"
+        ] = None
+
     print(
         f"  Saved:        "
         f"{relative_video_path}"
