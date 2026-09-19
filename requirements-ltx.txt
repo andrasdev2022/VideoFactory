@@ -1,0 +1,16 @@
+# Dedicated dependencies for .venv-ltx.
+# Keep these out of the main VideoFactory environment.
+#
+# PyTorch is installed separately by setup-local-ltx.ps1 so the
+# Windows CUDA wheel index can be selected explicitly.
+
+diffusers==0.40.0
+transformers>=4.53,<6
+accelerate>=1.9,<2
+safetensors>=0.5
+sentencepiece>=0.2
+protobuf>=5
+imageio>=2.37
+imageio-ffmpeg>=0.6
+huggingface_hub>=0.34
+Pillow>=10
