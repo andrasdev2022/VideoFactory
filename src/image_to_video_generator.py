@@ -4,6 +4,7 @@ from pathlib import Path
 import argparse
 import base64
 import json
+import math
 import os
 import sys
 import urllib.request
@@ -294,30 +295,31 @@ def validate_scene_preconditions(
         )
 
     # -----------------------------------------------------
-    # Duration
+    # Audio-driven timing
     # -----------------------------------------------------
 
-    duration = get_scene_duration(
+    render_duration = get_render_duration(
         job,
         scene_id,
     )
 
-    if duration is None:
+    if render_duration is None:
 
         errors.append(
             f"Scene {scene_id}: "
-            f"duration_sec is missing."
+            f"scene timing has not passed or "
+            f"render_duration_sec is missing."
         )
 
     elif not (
         MIN_DURATION_SEC
-        <= duration
+        <= render_duration
         <= MAX_DURATION_SEC
     ):
 
         errors.append(
             f"Scene {scene_id}: "
-            f"duration {duration}s is outside "
+            f"render duration {render_duration}s is outside "
             f"supported range "
             f"{MIN_DURATION_SEC}-"
             f"{MAX_DURATION_SEC}s."
@@ -598,6 +600,26 @@ def generate_scene_video(
     )
 
     # -----------------------------------------------------
+    # Current timing request
+    # -----------------------------------------------------
+
+    render_duration = get_render_duration(
+        job,
+        scene_id,
+    )
+
+    if render_duration is None:
+
+        raise RuntimeError(
+            f"Scene {scene_id}: approved render timing "
+            f"is not available."
+        )
+
+    provider_duration = get_provider_duration(
+        render_duration
+    )
+
+    # -----------------------------------------------------
     # Existing artifact
     # -----------------------------------------------------
 
@@ -606,30 +628,26 @@ def generate_scene_video(
         and not force
     ):
 
-        print(
-            f"  SKIP: Scene {scene_id} "
-            f"video already exists."
-        )
+        if video_metadata_matches_current_request(
+            scene=scene,
+            output_file=output_file,
+            render_duration_sec=render_duration,
+            provider_duration_sec=provider_duration,
+            source_image=image_file,
+        ):
 
-        video = scene.setdefault(
-            "video",
-            {},
-        )
-
-        video["status"] = (
-            "generated"
-        )
-
-        video["file"] = str(
-            output_file.relative_to(
-                PROJECT_ROOT
+            print(
+                f"  SKIP: Scene {scene_id} "
+                f"video already matches current timing."
             )
-        ).replace(
-            "\\",
-            "/",
-        )
 
-        return False
+            return False
+
+        print(
+            f"  STALE: Scene {scene_id} has an existing "
+            f"MP4, but its metadata does not match "
+            f"the current timing. Regenerating."
+        )
 
     # -----------------------------------------------------
     # Build Runway request
@@ -649,22 +667,6 @@ def generate_scene_video(
         )
     )
 
-    duration = get_scene_duration(
-        job,
-        scene_id,
-    )
-
-    if duration is None:
-
-        raise RuntimeError(
-            f"Scene {scene_id}: duration not found "
-            f"in script.scenes."
-        )
-
-    duration = int(
-        duration
-    )
-
     print(
         f"\nGenerating scene {scene_id}"
     )
@@ -674,7 +676,11 @@ def generate_scene_video(
     )
 
     print(
-        f"  Duration:     {duration}s"
+        f"  Target render:{render_duration:.3f}s"
+    )
+
+    print(
+        f"  Provider dur: {provider_duration}s"
     )
 
     print(
@@ -720,7 +726,7 @@ def generate_scene_video(
             prompt_image=prompt_image,
             prompt_text=prompt_text,
             ratio=VIDEO_RATIO,
-            duration=duration,
+            duration=provider_duration,
         )
         .wait_for_task_output(
             timeout=TASK_TIMEOUT_SEC,
@@ -805,7 +811,26 @@ def generate_scene_video(
             VIDEO_RATIO,
 
         "duration_sec":
-            duration,
+            provider_duration,
+
+        "provider_duration_sec":
+            provider_duration,
+
+        "target_render_duration_sec":
+            round(
+                render_duration,
+                3,
+            ),
+
+        "trim_required":
+            (
+                provider_duration
+                - render_duration
+                > 0.001
+            ),
+
+        "timing_policy":
+            "natural_voice_driven_v1",
 
         "source_image":
             image_file,
@@ -889,10 +914,10 @@ def all_scene_videos_generated(
     return True
 
 
-def get_scene_duration(
+def find_script_scene(
     job: dict,
     scene_id: int,
-) -> int | None:
+) -> dict | None:
 
     for script_scene in job.get(
         "script",
@@ -902,10 +927,174 @@ def get_scene_duration(
         [],
     ):
 
-        if script_scene.get("scene_id") == scene_id:
-            return script_scene.get("duration_sec")
+        if script_scene.get(
+            "scene_id"
+        ) == scene_id:
+
+            return script_scene
 
     return None
+
+
+def get_render_duration(
+    job: dict,
+    scene_id: int,
+) -> float | None:
+
+    script_scene = find_script_scene(
+        job,
+        scene_id,
+    )
+
+    if script_scene is None:
+        return None
+
+    timing = script_scene.get(
+        "timing",
+        {},
+    )
+
+    if timing.get(
+        "status"
+    ) != "passed":
+
+        return None
+
+    duration = timing.get(
+        "render_duration_sec"
+    )
+
+    if duration is None:
+        return None
+
+    try:
+
+        return float(
+            duration
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+
+        return None
+
+
+def get_provider_duration(
+    render_duration_sec: float,
+) -> int:
+
+    provider_duration = math.ceil(
+        float(
+            render_duration_sec
+        )
+        - 1e-9
+    )
+
+    if not (
+        MIN_DURATION_SEC
+        <= provider_duration
+        <= MAX_DURATION_SEC
+    ):
+
+        raise RuntimeError(
+            f"Provider duration {provider_duration}s "
+            f"is outside supported range "
+            f"{MIN_DURATION_SEC}-"
+            f"{MAX_DURATION_SEC}s."
+        )
+
+    return provider_duration
+
+
+def video_metadata_matches_current_request(
+    scene: dict,
+    output_file: Path,
+    render_duration_sec: float,
+    provider_duration_sec: int,
+    source_image: str,
+) -> bool:
+
+    video = scene.get(
+        "video",
+        {},
+    )
+
+    if video.get(
+        "status"
+    ) not in {
+        "generated",
+        "completed",
+        "passed",
+    }:
+
+        return False
+
+    video_file = video.get(
+        "file"
+    )
+
+    if not video_file:
+
+        return False
+
+    expected_file = str(
+        output_file.relative_to(
+            PROJECT_ROOT
+        )
+    ).replace(
+        "\\",
+        "/",
+    )
+
+    if video_file != expected_file:
+        return False
+
+    try:
+
+        stored_render_duration = float(
+            video.get(
+                "target_render_duration_sec"
+            )
+        )
+
+        stored_provider_duration = int(
+            video.get(
+                "provider_duration_sec"
+            )
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+
+        return False
+
+    if abs(
+        stored_render_duration
+        - float(
+            render_duration_sec
+        )
+    ) > 0.001:
+
+        return False
+
+    if (
+        stored_provider_duration
+        != provider_duration_sec
+    ):
+
+        return False
+
+    if video.get(
+        "source_image"
+    ) != source_image:
+
+        return False
+
+    return output_file.exists()
 
 def build_qc_correction(
     job: dict,
@@ -1047,7 +1236,7 @@ def build_qc_correction(
 def main() -> int:
 
     print("=" * 60)
-    print("VIDEO FACTORY - IMAGE TO VIDEO GENERATOR v1")
+    print("VIDEO FACTORY - IMAGE TO VIDEO GENERATOR v2")
     print("=" * 60)
 
     args = parse_args()
