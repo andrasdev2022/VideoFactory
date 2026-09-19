@@ -27,8 +27,18 @@ Local LTX runs in a separate CUDA/PyTorch environment:
     LTX model runtime
 ```
 
-The main process starts `src/local_ltx_worker.py` as a subprocess.
-This isolates the CUDA dependency stack from the rest of VideoFactory.
+The Local LTX CUDA runtime remains isolated from the main environment.
+
+Two execution modes are supported:
+
+- benchmark/manual single-scene runs use `src/local_ltx_worker.py` as a
+  one-shot subprocess
+- the master pipeline starts `src/local_ltx_service.py` once for the
+  scene-generation stage and reuses the already-loaded LTX pipeline across
+  scene subprocesses through localhost TCP
+
+This keeps the CUDA dependency stack isolated while avoiding repeated model
+loads during a full multi-scene job.
 
 ## Provider selection
 
@@ -54,15 +64,21 @@ Default Local LTX settings:
 model        Lightricks/LTX-Video
 resolution   512x896
 fps          24
-steps        20
+steps        12
 guidance     3.0
 offload      sequential
 dtype        FP16
 VAE tiling   enabled
 ```
 
-Sequential CPU offload is the safest starting point for 8 GB VRAM.
-It can be substantially slower than keeping the model on the GPU.
+Sequential CPU offload is the selected RTX 2070 baseline. Local benchmarking
+showed that model offload did not improve end-to-end time and used much more
+CUDA memory.
+
+The 12-step baseline was selected after comparing 20, 12, and 8 inference
+steps on the target RTX 2070. Eight steps produced unacceptable temporal
+breakdown, while 12 steps retained useful visual quality with materially
+lower generation time than 20 steps.
 
 ## Setup
 
@@ -147,6 +163,12 @@ python src\image_to_video_generator.py --scene 1 --force
 ```
 
 or run a new full job through the master orchestrator.
+
+For a full master-pipeline run, the orchestrator automatically starts the
+persistent Local LTX service before scene generation, waits until the model
+is loaded, passes the service endpoint to the scene subprocesses, and shuts
+the service down after the scene stage. Manual/benchmark runs fall back to
+the one-shot worker when no service endpoint is present.
 
 Provider identity is stored in scene video metadata. A cached Runway
 artifact is therefore not reused as a Local LTX cache hit, and vice versa.
