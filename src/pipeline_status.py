@@ -21,6 +21,7 @@ PIPELINE_STAGES = (
     "global_timing",
     "base_assembly",
     "subtitles",
+    "audio_assets",
     "audio_mix",
 )
 
@@ -722,6 +723,47 @@ def _compute_subtitles_status(
     )
 
 
+def _compute_audio_assets_status(
+    job: dict,
+) -> dict[str, Any]:
+
+    assets = (
+        job
+        .get(
+            "audio",
+            {},
+        )
+        .get(
+            "assets",
+            {},
+        )
+    )
+
+    if assets.get(
+        "status"
+    ) == "failed":
+
+        return _make_summary(
+            total=1,
+            ready=0,
+            failed=1,
+        )
+
+    if assets.get(
+        "status"
+    ) == "passed":
+
+        return _make_summary(
+            total=1,
+            ready=1,
+        )
+
+    return _make_summary(
+        total=1,
+        ready=0,
+    )
+
+
 def _compute_audio_mix_status(
     job: dict,
 ) -> dict[str, Any]:
@@ -857,6 +899,11 @@ def refresh_pipeline_status(
 
         "subtitles":
             _compute_subtitles_status(
+                job
+            ),
+
+        "audio_assets":
+            _compute_audio_assets_status(
                 job
             ),
 
@@ -1051,6 +1098,17 @@ def set_legacy_status_from_stage(
                 "subtitles_passed",
             "failed":
                 "subtitles_failed",
+        },
+
+        "audio_assets": {
+            "pending":
+                "audio_assets_pending",
+            "partial":
+                "audio_assets_partial",
+            "completed":
+                "audio_assets_passed",
+            "failed":
+                "audio_assets_failed",
         },
 
         "audio_mix": {
