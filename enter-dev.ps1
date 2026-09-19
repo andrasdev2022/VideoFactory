@@ -187,6 +187,7 @@ $env:ELEVENLABS_SFX_OUTPUT_FORMAT = "mp3_44100_128"
 $env:ELEVENLABS_HTTP_TIMEOUT_SEC = "300"
 $env:ELEVENLABS_SFX_DEFAULT_DURATION_SEC = "1.5"
 $env:ELEVENLABS_SFX_PROMPT_INFLUENCE = "0.5"
+$env:ELEVENLABS_SFX_MAX_PROMPT_CHARS = "430"
 
 
 # ------------------------------------------------------------
