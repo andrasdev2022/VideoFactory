@@ -145,6 +145,10 @@ $env:RUNWAY_VIDEO_RATIO = "720:1280"
 
 $env:RUNWAY_TASK_TIMEOUT_SEC = "600"
 
+$env:SCENE_TRIM_DURATION_TOLERANCE_SEC = "0.08"
+$env:SCENE_TRIM_CRF = "18"
+$env:SCENE_TRIM_PRESET = "medium"
+
 
 # ------------------------------------------------------------
 # IMAGE QC
