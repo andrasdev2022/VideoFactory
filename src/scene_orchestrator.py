@@ -341,6 +341,16 @@ def inspect_scene_state(
                 "status"
             ),
 
+        "video_error_type":
+            video.get(
+                "error_type"
+            ),
+
+        "video_error":
+            video.get(
+                "error"
+            ),
+
         "video_provider":
             video.get(
                 "provider"
@@ -1210,6 +1220,19 @@ def choose_next_action(
             video_attempts
             >= max_video_attempts
         ):
+
+            if (
+                state.get(
+                    "video_status"
+                )
+                == "failed"
+                and state.get(
+                    "video_error_type"
+                )
+                == "TaskFailedError"
+            ):
+
+                return ACTION_LOCAL_VIDEO_FALLBACK
 
             return ACTION_STOP_VIDEO
 
@@ -2626,9 +2649,42 @@ def main() -> int:
 
             if rc != 0:
 
+                if (
+                    new_state.get(
+                        "video_status"
+                    )
+                    == "failed"
+                    and new_state.get(
+                        "video_error_type"
+                    )
+                    == "TaskFailedError"
+                ):
+
+                    if (
+                        current_attempt
+                        < args.max_video_attempts
+                    ):
+
+                        print(
+                            "\nWARNING: Runway task failed "
+                            "transiently. Retrying within the "
+                            "existing video-attempt budget."
+                        )
+
+                        continue
+
+                    print(
+                        "\nWARNING: Runway task failed and "
+                        "the provider retry budget is exhausted. "
+                        "Switching to deterministic local fallback."
+                    )
+
+                    continue
+
                 print(
-                    "\nERROR: video generator "
-                    "returned non-zero exit code."
+                    "\nERROR: video generator returned "
+                    "non-zero exit code for a non-retryable "
+                    "provider/configuration error."
                 )
 
                 return 1
