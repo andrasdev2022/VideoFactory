@@ -39,7 +39,7 @@ GENERATED_STATUSES = {
 
 
 VIDEO_SEMANTIC_QC_POLICY_VERSION = (
-    "target_window_v3_dupcheck"
+    "target_window_v4_static_fallback"
 )
 
 
@@ -89,6 +89,10 @@ ACTION_UPGRADE_SAFE_MOTION_POLICY = (
 
 ACTION_LOCAL_VIDEO_FALLBACK = (
     "local_video_fallback"
+)
+
+ACTION_UPGRADE_LOCAL_FALLBACK_POLICY = (
+    "upgrade_local_fallback_policy"
 )
 
 ACTION_COMPLETE = (
@@ -905,6 +909,141 @@ def upgrade_safe_motion_policy_for_existing_video(
     return new_prompt
 
 
+def upgrade_local_fallback_policy_for_existing_video(
+    job: dict,
+    scene_id: int,
+) -> str:
+
+    scene = find_visual_scene(
+        job,
+        scene_id,
+    )
+
+    if scene is None:
+
+        raise RuntimeError(
+            f"Visual scene {scene_id} "
+            f"does not exist."
+        )
+
+    video = scene.get(
+        "video"
+    )
+
+    if not isinstance(
+        video,
+        dict,
+    ):
+
+        raise RuntimeError(
+            f"Scene {scene_id}: existing fallback video "
+            f"is required for policy-only recovery."
+        )
+
+    if scene.get(
+        "motion_strategy"
+    ) != "still_image_fallback_v1":
+
+        raise RuntimeError(
+            f"Scene {scene_id}: motion strategy is not "
+            f"still_image_fallback_v1."
+        )
+
+    new_prompt = (
+        "Deterministic static hold on the approved source image. "
+        "No independent character or object motion is required. "
+        "An imperceptible or extremely subtle camera push-in is "
+        "acceptable but not required to be visually detectable. "
+        "All characters, props, clothing, anatomy, background, "
+        "and composition remain stable. No character duplication, "
+        "no scene change, and no morphing."
+    )
+
+    history = scene.setdefault(
+        "motion_prompt_history",
+        [],
+    )
+
+    history.append(
+        {
+            "timestamp":
+                utc_now_iso(),
+
+            "reason":
+                "upgrade_local_fallback_semantic_policy",
+
+            "strategy":
+                "still_image_fallback_v1",
+
+            "old_motion_prompt":
+                scene.get(
+                    "motion_prompt",
+                    ""
+                ),
+
+            "new_motion_prompt":
+                new_prompt,
+
+            "preserved_video_task_id":
+                video.get(
+                    "task_id"
+                ),
+
+            "video_regenerated":
+                False,
+        }
+    )
+
+    scene[
+        "motion_prompt"
+    ] = new_prompt
+
+    scene[
+        "semantic_qc_policy"
+    ] = {
+        "version":
+            "still_image_fallback_v2",
+
+        "motion_mode":
+            "static_hold",
+
+        "allowed_exit_character_ids":
+            [],
+    }
+
+    video[
+        "semantic_qc"
+    ] = {
+        "status":
+            "pending",
+    }
+
+    video.pop(
+        "trimmed",
+        None,
+    )
+
+    job.pop(
+        "assembly",
+        None,
+    )
+
+    output = job.get(
+        "output"
+    )
+
+    if isinstance(
+        output,
+        dict,
+    ):
+
+        output[
+            "base_video_file"
+        ] = None
+
+    return new_prompt
+
+
 def image_is_generated(
     state: dict[str, Any],
 ) -> bool:
@@ -1106,7 +1245,7 @@ def choose_next_action(
         == "still_image_fallback_v1"
     ):
 
-        return ACTION_STOP_VIDEO
+        return ACTION_UPGRADE_LOCAL_FALLBACK_POLICY
 
     # A failed semantic result from an older QC policy must be
     # re-evaluated before spending another provider attempt.
@@ -1180,7 +1319,7 @@ def choose_next_action(
             == "still_image_fallback_v1"
         ):
 
-            return ACTION_STOP_VIDEO
+            return ACTION_UPGRADE_LOCAL_FALLBACK_POLICY
 
         if (
             video_attempts
@@ -1741,7 +1880,7 @@ def print_scene_state(
 def main() -> int:
 
     print("=" * 60)
-    print("VIDEO FACTORY - SCENE ORCHESTRATOR v7")
+    print("VIDEO FACTORY - SCENE ORCHESTRATOR v8")
     print("=" * 60)
 
     args = parse_args()
@@ -2970,6 +3109,98 @@ def main() -> int:
                 )
 
                 return 1
+
+            continue
+
+        # =================================================
+        # UPGRADE LOCAL FALLBACK SEMANTIC POLICY
+        # =================================================
+
+        if (
+            action
+            == ACTION_UPGRADE_LOCAL_FALLBACK_POLICY
+        ):
+
+            print(
+                "\nUpgrading deterministic fallback "
+                "semantic policy without regenerating video."
+            )
+
+            try:
+
+                updated_prompt = (
+                    upgrade_local_fallback_policy_for_existing_video(
+                        job,
+                        args.scene,
+                    )
+                )
+
+            except Exception as exc:
+
+                record_orchestration_result(
+                    job,
+                    args.scene,
+                    state,
+                    action=
+                        ACTION_UPGRADE_LOCAL_FALLBACK_POLICY,
+                    result=
+                        "upgrade_failed",
+                    orchestration_state=
+                        "failed",
+                    details={
+                        "error":
+                            str(
+                                exc
+                            ),
+                    },
+                )
+
+                save_job_atomic(
+                    job
+                )
+
+                print(
+                    f"\nERROR upgrading local "
+                    f"fallback policy:\n{exc}"
+                )
+
+                return 1
+
+            upgraded_state = (
+                inspect_scene_state(
+                    job,
+                    args.scene,
+                )
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                upgraded_state,
+                action=
+                    ACTION_UPGRADE_LOCAL_FALLBACK_POLICY,
+                result="applied",
+                details={
+                    "motion_prompt":
+                        updated_prompt,
+
+                    "video_regenerated":
+                        False,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            print(
+                f"  Updated prompt: "
+                f"{updated_prompt}"
+            )
+
+            print(
+                "  Existing local fallback video preserved."
+            )
 
             continue
 
