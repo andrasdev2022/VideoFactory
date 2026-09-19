@@ -12,7 +12,9 @@ from final_qc_export import (
     export_final_package,
     export_matches_current_request,
     get_export_paths,
+    get_static_hold_scene_ids,
     validate_metadata,
+    validate_pipeline_integrity,
 )
 
 
@@ -279,6 +281,39 @@ class FinalQCExportTests(
                 in warning
                 for warning in warnings
             )
+        )
+
+
+    def test_static_hold_scene_is_detected_for_manual_review(
+        self,
+    ):
+
+        job = {
+            "visuals": {
+                "scenes": [
+                    {
+                        "scene_id":
+                            4,
+
+                        "motion_strategy":
+                            "still_image_fallback_v1",
+
+                        "semantic_qc_policy": {
+                            "motion_mode":
+                                "static_hold",
+                        },
+                    },
+                ],
+            },
+        }
+
+        self.assertEqual(
+            get_static_hold_scene_ids(
+                job
+            ),
+            [
+                4,
+            ],
         )
 
 

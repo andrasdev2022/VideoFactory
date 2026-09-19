@@ -1117,6 +1117,68 @@ def video_metadata_matches_current_request(
 
     return output_file.exists()
 
+def compact_qc_observation(
+    value: Any,
+    max_chars: int = 320,
+) -> str:
+
+    if not value:
+
+        return ""
+
+    text = " ".join(
+        str(
+            value
+        )
+        .replace(
+            "\n",
+            " ",
+        )
+        .split()
+    )
+
+    if not text:
+
+        return ""
+
+    lower = text.lower()
+
+    however_index = lower.find(
+        "however"
+    )
+
+    if however_index >= 0:
+
+        text = text[
+            however_index:
+        ]
+
+    if len(
+        text
+    ) <= max_chars:
+
+        return text
+
+    candidate = text[
+        :max_chars - 1
+    ].rstrip()
+
+    last_space = candidate.rfind(
+        " "
+    )
+
+    if last_space >= max_chars // 2:
+
+        candidate = candidate[
+            :last_space
+        ].rstrip()
+
+    return (
+        candidate
+        + "…"
+    )
+
+
 def build_qc_correction(
     job: dict,
     scene: dict,
@@ -1242,6 +1304,21 @@ def build_qc_correction(
             corrections.append(
                 f"Keep {character_name}'s clothing unchanged."
             )
+
+    observation = compact_qc_observation(
+        qc.get(
+            "overall_notes"
+        )
+    )
+
+    if observation:
+
+        corrections.append(
+            (
+                "Previous QC observation: "
+                + observation
+            )
+        )
 
     if not corrections:
         return ""
@@ -1415,6 +1492,16 @@ def main() -> int:
                 f"{exc}"
             )
 
+            print(
+                f"  Exception type: "
+                f"{type(exc).__name__}"
+            )
+
+            print(
+                f"  Exception repr: "
+                f"{exc!r}"
+            )
+
             # ---------------------------------------------
             # Replace old artifact metadata.
             #
@@ -1429,6 +1516,12 @@ def main() -> int:
 
                 "error":
                     str(exc),
+
+                "error_type":
+                    type(exc).__name__,
+
+                "error_repr":
+                    repr(exc),
 
                 "qc": {
                     "status":

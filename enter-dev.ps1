@@ -4,6 +4,15 @@
 
 $ErrorActionPreference = "Stop"
 
+# Keep Python/native-process output Unicode-safe when piped through
+# Tee-Object or redirected to log files on Windows PowerShell.
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[Console]::InputEncoding = $utf8NoBom
+[Console]::OutputEncoding = $utf8NoBom
+$OutputEncoding = $utf8NoBom
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
+
 # ------------------------------------------------------------
 # PROJECT ROOT
 # ------------------------------------------------------------

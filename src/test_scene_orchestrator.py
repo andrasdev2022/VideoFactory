@@ -37,6 +37,8 @@ def make_state(
     image_qc=None,
     image_semantic_qc=None,
     video_status=None,
+    video_error_type=None,
+    video_error=None,
     video_provider=None,
     video_file=None,
     video_qc=None,
@@ -73,6 +75,12 @@ def make_state(
 
         "video_status":
             video_status,
+
+        "video_error_type":
+            video_error_type,
+
+        "video_error":
+            video_error,
 
         "video_provider":
             video_provider,
@@ -272,6 +280,84 @@ class SceneOrchestratorTests(
         self.assertEqual(
             action,
             ACTION_GENERATE_VIDEO,
+        )
+
+
+    def test_transient_provider_failure_retries_with_budget_remaining(
+        self,
+    ):
+
+        action = self.choose(
+            make_state(
+                image_status="generated",
+                image_file="scene.png",
+                image_qc="passed",
+                image_semantic_qc="passed",
+
+                video_status="failed",
+                video_error_type="TaskFailedError",
+                video_error="Task failed",
+            ),
+            image_attempts=1,
+            video_attempts=1,
+            max_video_attempts=4,
+        )
+
+        self.assertEqual(
+            action,
+            ACTION_GENERATE_VIDEO,
+        )
+
+
+    def test_transient_provider_failure_uses_local_fallback_at_limit(
+        self,
+    ):
+
+        action = self.choose(
+            make_state(
+                image_status="generated",
+                image_file="scene.png",
+                image_qc="passed",
+                image_semantic_qc="passed",
+
+                video_status="failed",
+                video_error_type="TaskFailedError",
+                video_error="Task failed",
+            ),
+            image_attempts=1,
+            video_attempts=4,
+            max_video_attempts=4,
+        )
+
+        self.assertEqual(
+            action,
+            ACTION_LOCAL_VIDEO_FALLBACK,
+        )
+
+
+    def test_nonretryable_provider_failure_stops_at_limit(
+        self,
+    ):
+
+        action = self.choose(
+            make_state(
+                image_status="generated",
+                image_file="scene.png",
+                image_qc="passed",
+                image_semantic_qc="passed",
+
+                video_status="failed",
+                video_error_type="AuthenticationError",
+                video_error="Invalid API key",
+            ),
+            image_attempts=1,
+            video_attempts=4,
+            max_video_attempts=4,
+        )
+
+        self.assertEqual(
+            action,
+            ACTION_STOP_VIDEO,
         )
 
 
@@ -484,6 +570,35 @@ class SceneOrchestratorTests(
         self.assertEqual(
             action,
             ACTION_UPGRADE_SAFE_MOTION_POLICY,
+        )
+
+
+    def test_provider_failure_during_safe_fallback_uses_local_video(
+        self,
+    ):
+
+        action = self.choose(
+            make_state(
+                image_status="generated",
+                image_file="scene.png",
+                image_qc="passed",
+                image_semantic_qc="passed",
+
+                video_status="failed",
+                video_provider=None,
+                video_file=None,
+                video_qc="pending",
+                video_semantic_qc="pending",
+                motion_strategy="safe_fallback_v2",
+            ),
+            image_attempts=1,
+            video_attempts=3,
+            max_video_attempts=4,
+        )
+
+        self.assertEqual(
+            action,
+            ACTION_LOCAL_VIDEO_FALLBACK,
         )
 
 
