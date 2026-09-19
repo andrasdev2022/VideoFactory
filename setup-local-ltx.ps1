@@ -92,11 +92,52 @@ Write-Host "Creating dedicated Python $PythonVersion environment:"
 Write-Host "  $VenvDir"
 
 if (-not (Test-Path $PythonExe)) {
+
     $PyLauncher = Get-Command py -ErrorAction SilentlyContinue
+
     if ($null -eq $PyLauncher) {
-        throw "Windows Python launcher 'py' was not found."
+        throw (
+            "Windows Python launcher 'py' was not found. " +
+            "Install the current Python launcher, then rerun setup."
+        )
     }
+
+    Write-Host ""
+    Write-Host "Checking Python $PythonVersion..."
+
+    & py "-$PythonVersion" --version 2>$null
+
+    if ($LASTEXITCODE -ne 0) {
+
+        Write-Host (
+            "Python $PythonVersion is not installed. " +
+            "Installing it with the Windows Python launcher..."
+        )
+
+        & py install $PythonVersion
+
+        if ($LASTEXITCODE -ne 0) {
+            throw (
+                "Automatic Python $PythonVersion installation failed. " +
+                "Run 'py install $PythonVersion' manually and rerun setup."
+            )
+        }
+
+        Write-Host ""
+        Write-Host "Python $PythonVersion installed."
+    }
+
+    Write-Host ""
+    Write-Host "Creating .venv-ltx..."
+
     & py "-$PythonVersion" -m venv $VenvDir
+
+    if ($LASTEXITCODE -ne 0) {
+        throw (
+            "Python $PythonVersion is available, but virtual-environment " +
+            "creation failed."
+        )
+    }
 }
 
 if (-not (Test-Path $PythonExe)) {
