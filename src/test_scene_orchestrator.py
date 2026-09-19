@@ -487,6 +487,35 @@ class SceneOrchestratorTests(
         )
 
 
+    def test_provider_failure_during_safe_fallback_uses_local_video(
+        self,
+    ):
+
+        action = self.choose(
+            make_state(
+                image_status="generated",
+                image_file="scene.png",
+                image_qc="passed",
+                image_semantic_qc="passed",
+
+                video_status="failed",
+                video_provider=None,
+                video_file=None,
+                video_qc="pending",
+                video_semantic_qc="pending",
+                motion_strategy="safe_fallback_v2",
+            ),
+            image_attempts=1,
+            video_attempts=3,
+            max_video_attempts=4,
+        )
+
+        self.assertEqual(
+            action,
+            ACTION_LOCAL_VIDEO_FALLBACK,
+        )
+
+
     def test_failed_safe_fallback_v2_uses_local_video_fallback(
         self,
     ):
