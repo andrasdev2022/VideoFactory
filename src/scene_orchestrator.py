@@ -65,6 +65,10 @@ ACTION_VIDEO_SEMANTIC_QC = (
     "video_semantic_qc"
 )
 
+ACTION_TRIM_VIDEO = (
+    "trim_video"
+)
+
 ACTION_RETRY_VIDEO_FROM_QC = (
     "retry_video_from_qc"
 )
@@ -271,6 +275,11 @@ def inspect_scene_state(
         {},
     )
 
+    trimmed = video.get(
+        "trimmed",
+        {},
+    )
+
     return {
 
         "timing_status":
@@ -327,6 +336,16 @@ def inspect_scene_state(
         "video_semantic_qc":
             video_semantic_qc.get(
                 "status"
+            ),
+
+        "trimmed_status":
+            trimmed.get(
+                "status"
+            ),
+
+        "trimmed_file":
+            trimmed.get(
+                "file"
             ),
     }
 
@@ -511,6 +530,18 @@ def choose_next_action(
         video_semantic_qc
         == "passed"
     ):
+
+        if (
+            state.get(
+                "trimmed_status"
+            )
+            != "passed"
+            or not state.get(
+                "trimmed_file"
+            )
+        ):
+
+            return ACTION_TRIM_VIDEO
 
         return ACTION_COMPLETE
 
@@ -1067,11 +1098,16 @@ def print_scene_state(
         f"{state.get('video_semantic_qc')}"
     )
 
+    print(
+        f"  trimmed video:     "
+        f"{state.get('trimmed_status')}"
+    )
+
 
 def main() -> int:
 
     print("=" * 60)
-    print("VIDEO FACTORY - SCENE ORCHESTRATOR v3")
+    print("VIDEO FACTORY - SCENE ORCHESTRATOR v4")
     print("=" * 60)
 
     args = parse_args()
@@ -1883,6 +1919,71 @@ def main() -> int:
             save_job_atomic(
                 job
             )
+
+            continue
+
+        # =================================================
+        # EXACT VIDEO TRIM
+        # =================================================
+
+        if (
+            action
+            == ACTION_TRIM_VIDEO
+        ):
+
+            rc = run_worker(
+                "scene_video_trimmer.py",
+                [
+                    "--scene",
+                    str(
+                        args.scene
+                    ),
+                ],
+            )
+
+            job = load_json(
+                JOB_FILE
+            )
+
+            new_state = (
+                inspect_scene_state(
+                    job,
+                    args.scene,
+                )
+            )
+
+            trim_result = (
+                new_state.get(
+                    "trimmed_status"
+                )
+                or "unknown"
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                new_state,
+                action=
+                    ACTION_TRIM_VIDEO,
+                result=
+                    trim_result,
+                details={
+                    "return_code":
+                        rc,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            if rc != 0:
+
+                print(
+                    "\nERROR: exact scene trim failed."
+                )
+
+                return 1
 
             continue
 
