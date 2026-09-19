@@ -12,6 +12,7 @@ def make_result(
     *,
     present=True,
     motion=True,
+    instances=1,
 ):
 
     return VideoSemanticQCOutput(
@@ -46,6 +47,9 @@ def make_result(
 
                 present_throughout=
                     present,
+
+                max_visible_instances=
+                    instances,
 
                 identity_stable=
                     True,
@@ -205,6 +209,38 @@ class VideoSemanticQCPolicyTests(
                 "approved scene-exit policy"
                 in warning
                 for warning in warnings
+            )
+        )
+
+
+    def test_duplicate_expected_character_always_fails(
+        self,
+    ):
+
+        scene = {
+            "characters": [
+                "char-001",
+            ],
+        }
+
+        passed, errors, warnings = (
+            evaluate_result(
+                scene,
+                make_result(
+                    instances=2,
+                ),
+            )
+        )
+
+        self.assertFalse(
+            passed
+        )
+
+        self.assertTrue(
+            any(
+                "duplicated main character"
+                in error
+                for error in errors
             )
         )
 
