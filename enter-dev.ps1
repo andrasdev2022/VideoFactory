@@ -162,6 +162,14 @@ $env:LOCAL_VIDEO_FALLBACK_CRF = "18"
 $env:LOCAL_VIDEO_FALLBACK_PRESET = "medium"
 $env:LOCAL_VIDEO_FALLBACK_MAX_ZOOM = "1.025"
 
+$env:SUBTITLE_FONT_SIZE = "72"
+$env:SUBTITLE_MARGIN_V = "320"
+$env:SUBTITLE_OUTLINE = "4"
+$env:SUBTITLE_SHADOW = "1"
+$env:SUBTITLE_VIDEO_CRF = "16"
+$env:SUBTITLE_VIDEO_PRESET = "medium"
+$env:SUBTITLE_DURATION_TOLERANCE_SEC = "0.15"
+
 
 # ------------------------------------------------------------
 # IMAGE QC
