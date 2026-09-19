@@ -77,6 +77,10 @@ ACTION_SAFE_MOTION_FALLBACK = (
     "safe_motion_fallback"
 )
 
+ACTION_UPGRADE_SAFE_MOTION_POLICY = (
+    "upgrade_safe_motion_policy"
+)
+
 ACTION_COMPLETE = (
     "complete"
 )
@@ -355,32 +359,53 @@ def inspect_scene_state(
     }
 
 
-def build_safe_motion_prompt(
+def infer_allowed_exit_character_ids(
     job: dict,
     scene_id: int,
-) -> str:
+) -> list[str]:
 
-    scene = find_visual_scene(
+    script_scene = find_script_scene(
         job,
         scene_id,
     )
 
-    if scene is None:
-
-        raise RuntimeError(
-            f"Visual scene {scene_id} "
-            f"does not exist."
-        )
-
-    character_ids = list(
-        scene.get(
-            "characters",
-            [],
-        )
-        or []
+    visual_scene = find_visual_scene(
+        job,
+        scene_id,
     )
 
-    character_names: list[str] = []
+    if (
+        script_scene is None
+        or visual_scene is None
+    ):
+
+        return []
+
+    visual = script_scene.get(
+        "visual",
+        {},
+    )
+
+    source_text = " ".join(
+        str(
+            value
+        )
+        for value in (
+            visual.get(
+                "description",
+                ""
+            ),
+            visual.get(
+                "camera",
+                ""
+            ),
+            visual_scene.get(
+                "continuity_notes",
+                ""
+            ),
+        )
+        if value
+    ).lower()
 
     character_map = {
         character.get(
@@ -398,60 +423,191 @@ def build_safe_motion_prompt(
         )
     }
 
-    for character_id in character_ids:
+    exit_markers = (
+        " exits",
+        " exit ",
+        " leaves",
+        " leave ",
+        " departs",
+        " departing",
+        " walks toward",
+        " walks to",
+        " heads toward",
+        " heads to",
+        " moves toward the elevator",
+        " toward the elevator",
+    )
+
+    allowed: list[str] = []
+
+    for character_id in (
+        visual_scene.get(
+            "characters",
+            [],
+        )
+        or []
+    ):
 
         name = character_map.get(
             character_id
         )
 
-        if (
-            isinstance(
-                name,
-                str,
-            )
-            and name.strip()
+        if not isinstance(
+            name,
+            str,
         ):
 
-            character_names.append(
-                name.strip()
-            )
+            continue
 
-    if len(
-        character_names
-    ) >= 2:
+        lowered_name = name.lower()
 
-        subject_text = (
-            ", ".join(
-                character_names[
-                    :-1
-                ]
+        name_positions = [
+            index
+            for index in range(
+                len(
+                    source_text
+                )
             )
-            + " and "
-            + character_names[
-                -1
+            if source_text.startswith(
+                lowered_name,
+                index,
+            )
+        ]
+
+        allowed_for_character = False
+
+        for position in name_positions:
+
+            window = source_text[
+                position:
+                position + 160
             ]
+
+            if any(
+                marker in window
+                for marker in exit_markers
+            ):
+
+                allowed_for_character = True
+                break
+
+        if allowed_for_character:
+
+            allowed.append(
+                character_id
+            )
+
+    return allowed
+
+
+def build_safe_motion_prompt(
+    job: dict,
+    scene_id: int,
+) -> str:
+
+    scene = find_visual_scene(
+        job,
+        scene_id,
+    )
+
+    if scene is None:
+
+        raise RuntimeError(
+            f"Visual scene {scene_id} "
+            f"does not exist."
         )
 
-    elif character_names:
+    allowed_exit_ids = (
+        infer_allowed_exit_character_ids(
+            job,
+            scene_id,
+        )
+    )
 
-        subject_text = (
-            character_names[0]
+    character_map = {
+        character.get(
+            "character_id"
+        ):
+            character.get(
+                "name"
+            )
+        for character in job.get(
+            "characters",
+            [],
+        )
+        if character.get(
+            "character_id"
+        )
+    }
+
+    allowed_exit_names = [
+        character_map.get(
+            character_id,
+            character_id,
+        )
+        for character_id in allowed_exit_ids
+    ]
+
+    fixed_names = [
+        character_map.get(
+            character_id,
+            character_id,
+        )
+        for character_id in (
+            scene.get(
+                "characters",
+                [],
+            )
+            or []
+        )
+        if character_id
+        not in allowed_exit_ids
+    ]
+
+    parts = [
+        (
+            "Locked-off camera. Preserve the approved "
+            "source-image identity, environment, and "
+            "overall composition."
+        ),
+    ]
+
+    if allowed_exit_names:
+
+        parts.append(
+            (
+                f"{', '.join(allowed_exit_names)} may continue "
+                f"the simple departure already implied by the "
+                f"approved scene and may leave frame only as a "
+                f"natural result of that departure. Do not "
+                f"duplicate, teleport, disappear abruptly, or "
+                f"reappear."
+            )
         )
 
-    else:
+    if fixed_names:
 
-        subject_text = (
-            "All principal characters"
+        parts.append(
+            (
+                f"{', '.join(fixed_names)} remain clearly visible "
+                f"in their source-image positions for the entire "
+                f"shot."
+            )
         )
 
-    return (
-        "Locked-off camera. Preserve the approved source-image "
-        f"composition exactly. {subject_text} remain clearly "
-        "visible in their source-image positions for the entire "
-        "shot. No walking, entering, leaving, crossing frame, "
-        "duplication, camera movement, or scene change. Only "
-        "subtle breathing, blinking, and tiny head movement. "
-        "One continuous shot; no morphing."
+    parts.append(
+        (
+            "No camera movement, scene change, new action, "
+            "character duplication, or morphing. Keep all "
+            "identity, clothing, anatomy, props, and background "
+            "stable. Only subtle breathing, blinking, and tiny "
+            "head movement besides the explicitly allowed "
+            "departure. One continuous shot."
+        )
+    )
+
+    return " ".join(
+        parts
     )
 
 
@@ -494,6 +650,13 @@ def apply_safe_motion_fallback(
         )
     )
 
+    allowed_exit_ids = (
+        infer_allowed_exit_character_ids(
+            job,
+            scene_id,
+        )
+    )
+
     new_prompt = build_safe_motion_prompt(
         job,
         scene_id,
@@ -513,13 +676,16 @@ def apply_safe_motion_fallback(
                 "semantic_qc_repeated_failure",
 
             "strategy":
-                "safe_fallback_v1",
+                "safe_fallback_v2",
 
             "old_motion_prompt":
                 old_prompt,
 
             "new_motion_prompt":
                 new_prompt,
+
+            "allowed_exit_character_ids":
+                allowed_exit_ids,
 
             "previous_video_task_id":
                 previous_video.get(
@@ -548,12 +714,149 @@ def apply_safe_motion_fallback(
 
     scene[
         "motion_strategy"
-    ] = "safe_fallback_v1"
+    ] = "safe_fallback_v2"
 
-    # The previous video belongs to the previous motion
-    # strategy and must not remain authoritative.
+    scene[
+        "semantic_qc_policy"
+    ] = {
+        "version":
+            "safe_fallback_v2",
+
+        "allowed_exit_character_ids":
+            allowed_exit_ids,
+    }
+
     scene.pop(
         "video",
+        None,
+    )
+
+    job.pop(
+        "assembly",
+        None,
+    )
+
+    output = job.get(
+        "output"
+    )
+
+    if isinstance(
+        output,
+        dict,
+    ):
+
+        output[
+            "base_video_file"
+        ] = None
+
+    return new_prompt
+
+
+def upgrade_safe_motion_policy_for_existing_video(
+    job: dict,
+    scene_id: int,
+) -> str:
+
+    scene = find_visual_scene(
+        job,
+        scene_id,
+    )
+
+    if scene is None:
+
+        raise RuntimeError(
+            f"Visual scene {scene_id} "
+            f"does not exist."
+        )
+
+    video = scene.get(
+        "video"
+    )
+
+    if not isinstance(
+        video,
+        dict,
+    ):
+
+        raise RuntimeError(
+            f"Scene {scene_id}: existing video "
+            f"is required for policy-only recovery."
+        )
+
+    allowed_exit_ids = (
+        infer_allowed_exit_character_ids(
+            job,
+            scene_id,
+        )
+    )
+
+    new_prompt = build_safe_motion_prompt(
+        job,
+        scene_id,
+    )
+
+    history = scene.setdefault(
+        "motion_prompt_history",
+        [],
+    )
+
+    history.append(
+        {
+            "timestamp":
+                utc_now_iso(),
+
+            "reason":
+                "upgrade_safe_fallback_policy_for_existing_video",
+
+            "strategy":
+                "safe_fallback_v2",
+
+            "old_motion_prompt":
+                scene.get(
+                    "motion_prompt",
+                    ""
+                ),
+
+            "new_motion_prompt":
+                new_prompt,
+
+            "allowed_exit_character_ids":
+                allowed_exit_ids,
+
+            "preserved_video_task_id":
+                video.get(
+                    "task_id"
+                ),
+        }
+    )
+
+    scene[
+        "motion_prompt"
+    ] = new_prompt
+
+    scene[
+        "motion_strategy"
+    ] = "safe_fallback_v2"
+
+    scene[
+        "semantic_qc_policy"
+    ] = {
+        "version":
+            "safe_fallback_v2",
+
+        "allowed_exit_character_ids":
+            allowed_exit_ids,
+    }
+
+    video[
+        "semantic_qc"
+    ] = {
+        "status":
+            "pending",
+    }
+
+    video.pop(
+        "trimmed",
         None,
     )
 
@@ -783,6 +1086,15 @@ def choose_next_action(
                 "motion_strategy"
             )
             == "safe_fallback_v1"
+        ):
+
+            return ACTION_UPGRADE_SAFE_MOTION_POLICY
+
+        if (
+            state.get(
+                "motion_strategy"
+            )
+            == "safe_fallback_v2"
         ):
 
             return ACTION_STOP_VIDEO
@@ -2320,6 +2632,98 @@ def main() -> int:
                 )
 
                 return 1
+
+            continue
+
+        # =================================================
+        # UPGRADE LEGACY SAFE FALLBACK POLICY
+        # =================================================
+
+        if (
+            action
+            == ACTION_UPGRADE_SAFE_MOTION_POLICY
+        ):
+
+            print(
+                "\nUpgrading safe fallback policy "
+                "without regenerating the video."
+            )
+
+            try:
+
+                upgraded_prompt = (
+                    upgrade_safe_motion_policy_for_existing_video(
+                        job,
+                        args.scene,
+                    )
+                )
+
+            except Exception as exc:
+
+                record_orchestration_result(
+                    job,
+                    args.scene,
+                    state,
+                    action=
+                        ACTION_UPGRADE_SAFE_MOTION_POLICY,
+                    result=
+                        "upgrade_failed",
+                    orchestration_state=
+                        "failed",
+                    details={
+                        "error":
+                            str(
+                                exc
+                            ),
+                    },
+                )
+
+                save_job_atomic(
+                    job
+                )
+
+                print(
+                    f"\nERROR upgrading safe "
+                    f"motion policy:\n{exc}"
+                )
+
+                return 1
+
+            upgraded_state = (
+                inspect_scene_state(
+                    job,
+                    args.scene,
+                )
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                upgraded_state,
+                action=
+                    ACTION_UPGRADE_SAFE_MOTION_POLICY,
+                result="applied",
+                details={
+                    "motion_prompt":
+                        upgraded_prompt,
+
+                    "video_regenerated":
+                        False,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            print(
+                f"  Updated prompt: "
+                f"{upgraded_prompt}"
+            )
+
+            print(
+                "  Existing Runway video preserved."
+            )
 
             continue
 
