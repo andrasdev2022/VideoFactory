@@ -526,7 +526,6 @@ def preflight() -> None:
 
     for name in (
         "OPENAI_API_KEY",
-        "RUNWAYML_API_SECRET",
         "ELEVENLABS_API_KEY",
     ):
         if not os.getenv(
@@ -535,6 +534,73 @@ def preflight() -> None:
             missing.append(
                 name
             )
+
+    video_provider = os.getenv(
+        "VIDEO_PROVIDER",
+        "local_ltx",
+    ).strip().lower()
+
+    if video_provider == "runway":
+
+        if not os.getenv(
+            "RUNWAYML_API_SECRET"
+        ):
+
+            missing.append(
+                "RUNWAYML_API_SECRET"
+            )
+
+    elif video_provider == "local_ltx":
+
+        local_ltx_python = Path(
+            os.getenv(
+                "LOCAL_LTX_PYTHON",
+                str(
+                    PROJECT_ROOT
+                    / ".venv-ltx"
+                    / "Scripts"
+                    / "python.exe"
+                ),
+            )
+        )
+
+        local_ltx_worker = Path(
+            os.getenv(
+                "LOCAL_LTX_WORKER",
+                str(
+                    SRC_DIR
+                    / "local_ltx_worker.py"
+                ),
+            )
+        )
+
+        if not local_ltx_python.exists():
+
+            missing.append(
+                (
+                    "Local LTX environment "
+                    f"({local_ltx_python})"
+                )
+            )
+
+        if not local_ltx_worker.exists():
+
+            missing.append(
+                (
+                    "Local LTX worker "
+                    f"({local_ltx_worker})"
+                )
+            )
+
+    else:
+
+        raise PipelineError(
+            (
+                "Unsupported VIDEO_PROVIDER: "
+                f"{video_provider}. "
+                "Expected 'local_ltx' or 'runway'."
+            )
+        )
 
     for command in (
         "ffmpeg",
