@@ -74,6 +74,11 @@ class CharacterVideoQC(BaseModel):
 
     present_throughout: bool
 
+    max_visible_instances: int = Field(
+        ge=0,
+        le=10,
+    )
+
     identity_stable: bool
 
     appearance_stable: bool
@@ -155,6 +160,11 @@ SOURCE FRAME CONTINUITY
 
 CHARACTER CONSISTENCY
 For every expected character:
+- Report max_visible_instances: the maximum number of simultaneously
+  visible instances of that expected character in any supplied sample.
+  A duplicated main character means max_visible_instances > 1.
+  Do not treat a duplicate of an expected character as a harmless
+  background extra.
 - Is the character present when expected?
 - If semantic_qc_policy.allowed_exit_character_ids contains a
   character, that character may leave frame naturally as part of the
@@ -1199,6 +1209,20 @@ def evaluate_result(
         if character.character_id not in expected_ids:
             continue
 
+        if (
+            character.max_visible_instances
+            > 1
+        ):
+
+            errors.append(
+                prefix
+                + (
+                    "duplicated main character detected "
+                    f"({character.max_visible_instances} "
+                    "simultaneous instances)."
+                )
+            )
+
         if not character.present_throughout:
 
             if (
@@ -1500,7 +1524,7 @@ def cleanup_frames(
 def main() -> int:
 
     print("=" * 60)
-    print("VIDEO FACTORY - VIDEO SEMANTIC QC v3")
+    print("VIDEO FACTORY - VIDEO SEMANTIC QC v4")
     print("=" * 60)
 
     args = parse_args()
@@ -1863,6 +1887,11 @@ def main() -> int:
             print(
                 f"    present:    "
                 f"{character.present_throughout}"
+            )
+
+            print(
+                f"    instances:  "
+                f"{character.max_visible_instances}"
             )
 
             print(
