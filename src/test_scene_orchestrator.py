@@ -7,6 +7,7 @@ from scene_orchestrator import (
     ACTION_IMAGE_QC,
     ACTION_IMAGE_SEMANTIC_QC,
     ACTION_SAFE_MOTION_FALLBACK,
+    ACTION_UPGRADE_SAFE_MOTION_POLICY,
     ACTION_RETRY_VIDEO_FROM_QC,
     ACTION_STOP_IMAGE,
     ACTION_STOP_TIMING,
@@ -16,6 +17,8 @@ from scene_orchestrator import (
     ACTION_VIDEO_SEMANTIC_QC,
     apply_safe_motion_fallback,
     build_safe_motion_prompt,
+    infer_allowed_exit_character_ids,
+    upgrade_safe_motion_policy_for_existing_video,
     choose_next_action,
 )
 
@@ -382,7 +385,7 @@ class SceneOrchestratorTests(
         )
 
 
-    def test_failed_safe_fallback_does_not_repeat(
+    def test_legacy_safe_fallback_upgrades_policy_without_generation(
         self,
     ):
 
@@ -400,8 +403,36 @@ class SceneOrchestratorTests(
                 motion_strategy="safe_fallback_v1",
             ),
             image_attempts=1,
-            video_attempts=3,
+            video_attempts=4,
             max_video_attempts=4,
+        )
+
+        self.assertEqual(
+            action,
+            ACTION_UPGRADE_SAFE_MOTION_POLICY,
+        )
+
+
+    def test_failed_safe_fallback_v2_does_not_repeat(
+        self,
+    ):
+
+        action = self.choose(
+            make_state(
+                image_status="generated",
+                image_file="scene.png",
+                image_qc="passed",
+                image_semantic_qc="passed",
+
+                video_status="generated",
+                video_file="scene.mp4",
+                video_qc="passed",
+                video_semantic_qc="failed",
+                motion_strategy="safe_fallback_v2",
+            ),
+            image_attempts=1,
+            video_attempts=4,
+            max_video_attempts=5,
         )
 
         self.assertEqual(
@@ -410,7 +441,7 @@ class SceneOrchestratorTests(
         )
 
 
-    def test_safe_motion_prompt_is_locked_and_character_preserving(
+    def test_safe_motion_prompt_preserves_approved_exit(
         self,
     ):
 
@@ -429,6 +460,25 @@ class SceneOrchestratorTests(
                         "Mr. Whiskers",
                 },
             ],
+            "script": {
+                "scenes": [
+                    {
+                        "scene_id":
+                            5,
+
+                        "visual": {
+                            "description":
+                                (
+                                    "Mike exits the office "
+                                    "toward the elevator."
+                                ),
+
+                            "camera":
+                                "Follow Mike toward the elevator.",
+                        },
+                    },
+                ],
+            },
             "visuals": {
                 "scenes": [
                     {
@@ -439,10 +489,30 @@ class SceneOrchestratorTests(
                             "char-001",
                             "char-002",
                         ],
+
+                        "continuity_notes":
+                            (
+                                "Mike is the defeated "
+                                "departing employee."
+                            ),
                     },
                 ],
             },
         }
+
+        allowed = (
+            infer_allowed_exit_character_ids(
+                job,
+                5,
+            )
+        )
+
+        self.assertEqual(
+            allowed,
+            [
+                "char-001",
+            ],
+        )
 
         prompt = build_safe_motion_prompt(
             job,
@@ -455,23 +525,23 @@ class SceneOrchestratorTests(
         )
 
         self.assertIn(
-            "Mike",
+            "Mike may continue",
             prompt,
         )
 
         self.assertIn(
-            "Mr. Whiskers",
+            "may leave frame",
             prompt,
         )
 
         self.assertIn(
-            "No walking",
+            "Mr. Whiskers remain clearly visible",
             prompt,
         )
 
         self.assertIn(
             "no morphing",
-            prompt,
+            prompt.lower(),
         )
 
 
@@ -488,6 +558,20 @@ class SceneOrchestratorTests(
                         "Mike",
                 },
             ],
+            "script": {
+                "scenes": [
+                    {
+                        "scene_id":
+                            5,
+
+                        "visual": {
+                            "description":
+                                "Mike exits the office.",
+                        },
+                    },
+                ],
+            },
+
             "visuals": {
                 "scenes": [
                     {
@@ -547,7 +631,7 @@ class SceneOrchestratorTests(
             scene[
                 "motion_strategy"
             ],
-            "safe_fallback_v1",
+            "safe_fallback_v2",
         )
 
         self.assertEqual(
@@ -555,6 +639,17 @@ class SceneOrchestratorTests(
                 "motion_prompt"
             ],
             prompt,
+        )
+
+        self.assertEqual(
+            scene[
+                "semantic_qc_policy"
+            ][
+                "allowed_exit_character_ids"
+            ],
+            [
+                "char-001",
+            ],
         )
 
         self.assertNotIn(
@@ -582,6 +677,123 @@ class SceneOrchestratorTests(
             ][
                 "base_video_file"
             ]
+        )
+
+
+    def test_upgrade_safe_policy_preserves_existing_video(
+        self,
+    ):
+
+        job = {
+            "characters": [
+                {
+                    "character_id":
+                        "char-001",
+                    "name":
+                        "Mike",
+                },
+                {
+                    "character_id":
+                        "char-002",
+                    "name":
+                        "Mr. Whiskers",
+                },
+            ],
+            "script": {
+                "scenes": [
+                    {
+                        "scene_id":
+                            5,
+
+                        "visual": {
+                            "description":
+                                (
+                                    "Mike exits the office "
+                                    "toward the elevator."
+                                ),
+                        },
+                    },
+                ],
+            },
+            "visuals": {
+                "scenes": [
+                    {
+                        "scene_id":
+                            5,
+
+                        "characters": [
+                            "char-001",
+                            "char-002",
+                        ],
+
+                        "motion_prompt":
+                            "Old rigid safe prompt.",
+
+                        "motion_strategy":
+                            "safe_fallback_v1",
+
+                        "video": {
+                            "task_id":
+                                "task-4",
+
+                            "file":
+                                "scene_005.mp4",
+
+                            "semantic_qc": {
+                                "status":
+                                    "failed",
+                            },
+                        },
+                    },
+                ],
+            },
+        }
+
+        prompt = (
+            upgrade_safe_motion_policy_for_existing_video(
+                job,
+                5,
+            )
+        )
+
+        scene = (
+            job[
+                "visuals"
+            ][
+                "scenes"
+            ][0]
+        )
+
+        self.assertEqual(
+            scene[
+                "motion_strategy"
+            ],
+            "safe_fallback_v2",
+        )
+
+        self.assertEqual(
+            scene[
+                "video"
+            ][
+                "task_id"
+            ],
+            "task-4",
+        )
+
+        self.assertEqual(
+            scene[
+                "video"
+            ][
+                "semantic_qc"
+            ][
+                "status"
+            ],
+            "pending",
+        )
+
+        self.assertIn(
+            "may leave frame",
+            prompt,
         )
 
 
