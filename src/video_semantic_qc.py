@@ -151,6 +151,11 @@ SOURCE FRAME CONTINUITY
 CHARACTER CONSISTENCY
 For every expected character:
 - Is the character present when expected?
+- If semantic_qc_policy.allowed_exit_character_ids contains a
+  character, that character may leave frame naturally as part of the
+  approved action and does not need to remain present through the final
+  sample. Judge identity/appearance/clothing stability only while the
+  character is visible.
 - Does identity remain stable across the sampled frames?
 - Do face, species, fur, hair and defining physical traits remain
   stable?
@@ -769,6 +774,12 @@ def build_context(
                 "image_prompt"
             ),
 
+        "semantic_qc_policy":
+            scene.get(
+                "semantic_qc_policy",
+                {},
+            ),
+
         "expected_characters":
             characters,
 
@@ -1091,6 +1102,19 @@ def evaluate_result(
         )
     )
 
+    allowed_exit_ids = set(
+        scene
+        .get(
+            "semantic_qc_policy",
+            {},
+        )
+        .get(
+            "allowed_exit_character_ids",
+            [],
+        )
+        or []
+    )
+
     actual_ids = {
         character.character_id
         for character
@@ -1120,10 +1144,23 @@ def evaluate_result(
 
         if not character.present_throughout:
 
-            errors.append(
-                prefix
-                + "character is not consistently present."
-            )
+            if (
+                character.character_id
+                in allowed_exit_ids
+            ):
+
+                warnings.append(
+                    prefix
+                    + "character leaves frame under "
+                    "the approved scene-exit policy."
+                )
+
+            else:
+
+                errors.append(
+                    prefix
+                    + "character is not consistently present."
+                )
 
         if not character.identity_stable:
 
@@ -1268,6 +1305,12 @@ def apply_result(
         "overall_notes":
             result.overall_notes,
 
+        "applied_policy":
+            scene.get(
+                "semantic_qc_policy",
+                {},
+            ),
+
         "errors":
             errors,
 
@@ -1381,7 +1424,7 @@ def cleanup_frames(
 def main() -> int:
 
     print("=" * 60)
-    print("VIDEO FACTORY - VIDEO SEMANTIC QC v1")
+    print("VIDEO FACTORY - VIDEO SEMANTIC QC v2")
     print("=" * 60)
 
     args = parse_args()
