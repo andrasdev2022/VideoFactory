@@ -1188,6 +1188,24 @@ def choose_next_action(
         state
     ):
 
+        # A provider failure during the deterministic safe-motion
+        # Runway attempt should not abort the scene. The safe
+        # strategy has already been exhausted, so switch directly
+        # to the deterministic local still-image fallback instead
+        # of spending another provider generation attempt.
+        if (
+            state.get(
+                "video_status"
+            )
+            == "failed"
+            and state.get(
+                "motion_strategy"
+            )
+            == "safe_fallback_v2"
+        ):
+
+            return ACTION_LOCAL_VIDEO_FALLBACK
+
         if (
             video_attempts
             >= max_video_attempts
@@ -3140,11 +3158,20 @@ def main() -> int:
             if rc != 0:
 
                 print(
-                    "\nERROR: video generation "
-                    "with safe motion fallback failed."
+                    "\nWARNING: Runway generation with the "
+                    "safe-motion fallback failed."
                 )
 
-                return 1
+                print(
+                    "Switching to deterministic local "
+                    "still-image fallback."
+                )
+
+                # Keep the scene orchestrator alive. The failed
+                # provider artifact is recorded in job state, and
+                # choose_next_action() will route safe_fallback_v2
+                # directly to ACTION_LOCAL_VIDEO_FALLBACK.
+                continue
 
             continue
 
