@@ -14,6 +14,7 @@ PIPELINE_STAGES = (
     "scene_videos",
     "video_qc",
     "video_semantic_qc",
+    "scene_trimmed",
     "voiceovers",
     "voice_qc",
     "scene_timing",
@@ -568,6 +569,28 @@ def _compute_video_semantic_qc_status(
     )
 
 
+def _compute_scene_trimmed_status(
+    job: dict,
+) -> dict[str, Any]:
+
+    total, ready, failed = (
+        _status_counts_for_scene_field(
+            job,
+            (
+                "video",
+                "trimmed",
+                "status",
+            ),
+        )
+    )
+
+    return _make_summary(
+        total=total,
+        ready=ready,
+        failed=failed,
+    )
+
+
 def refresh_pipeline_status(
     job: dict,
 ) -> dict[str, Any]:
@@ -621,6 +644,11 @@ def refresh_pipeline_status(
 
         "video_semantic_qc":
             _compute_video_semantic_qc_status(
+                job
+            ),
+
+        "scene_trimmed":
+            _compute_scene_trimmed_status(
                 job
             ),
 
@@ -753,6 +781,17 @@ def set_legacy_status_from_stage(
                 "scene_videos_semantic_qc_passed",
             "failed":
                 "scene_videos_semantic_qc_failed",
+        },
+
+        "scene_trimmed": {
+            "pending":
+                "scene_trimmed_pending",
+            "partial":
+                "scene_trimmed_partial",
+            "completed":
+                "scene_trimmed_passed",
+            "failed":
+                "scene_trimmed_failed",
         },
 
         "voiceovers": {
