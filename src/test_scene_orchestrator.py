@@ -9,6 +9,7 @@ from scene_orchestrator import (
     ACTION_REGENERATE_MOTION,
     ACTION_RETRY_VIDEO_FROM_QC,
     ACTION_STOP_IMAGE,
+    ACTION_STOP_TIMING,
     ACTION_STOP_VIDEO,
     ACTION_VIDEO_QC,
     ACTION_VIDEO_SEMANTIC_QC,
@@ -18,6 +19,9 @@ from scene_orchestrator import (
 
 def make_state(
     *,
+    timing_status="passed",
+    render_duration_sec=5.0,
+    script_revision_required=False,
     image_status=None,
     image_file=None,
     image_qc=None,
@@ -29,6 +33,15 @@ def make_state(
 ):
 
     return {
+        "timing_status":
+            timing_status,
+
+        "render_duration_sec":
+            render_duration_sec,
+
+        "script_revision_required":
+            script_revision_required,
+
         "image_status":
             image_status,
 
@@ -78,6 +91,41 @@ class SceneOrchestratorTests(
                 max_image_attempts,
             max_video_attempts=
                 max_video_attempts,
+        )
+
+
+    def test_missing_timing_stops_before_image_generation(
+        self,
+    ):
+
+        action = self.choose(
+            make_state(
+                timing_status=None,
+                render_duration_sec=None,
+            )
+        )
+
+        self.assertEqual(
+            action,
+            ACTION_STOP_TIMING,
+        )
+
+
+    def test_failed_timing_stops_before_image_generation(
+        self,
+    ):
+
+        action = self.choose(
+            make_state(
+                timing_status="failed",
+                render_duration_sec=None,
+                script_revision_required=True,
+            )
+        )
+
+        self.assertEqual(
+            action,
+            ACTION_STOP_TIMING,
         )
 
 
