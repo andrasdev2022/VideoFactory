@@ -17,6 +17,7 @@ PIPELINE_STAGES = (
     "voiceovers",
     "voice_qc",
     "scene_timing",
+    "global_timing",
 )
 
 def _make_summary(
@@ -637,6 +638,11 @@ def refresh_pipeline_status(
             _compute_scene_timing_status(
                 job
             ),
+
+        "global_timing":
+            _compute_global_timing_status(
+                job
+            ),
     }
 
     job["pipeline_status"] = (
@@ -780,6 +786,17 @@ def set_legacy_status_from_stage(
                 "scene_timing_passed",
             "failed":
                 "scene_timing_failed",
+        },
+
+        "global_timing": {
+            "pending":
+                "global_timing_pending",
+            "partial":
+                "global_timing_partial",
+            "completed":
+                "global_timing_passed",
+            "failed":
+                "global_timing_failed",
         },
     }
 
@@ -1013,4 +1030,83 @@ def _compute_scene_timing_status(
         total=len(scenes),
         ready=ready,
         failed=failed,
+    )
+
+def _compute_global_timing_status(
+    job: dict,
+) -> dict[str, Any]:
+
+    scenes = (
+        _get_script_scenes(
+            job
+        )
+    )
+
+    if not scenes:
+
+        return _make_summary(
+            total=1,
+            ready=0,
+        )
+
+    timing_statuses = [
+        scene
+        .get(
+            "timing",
+            {},
+        )
+        .get(
+            "status"
+        )
+        for scene in scenes
+    ]
+
+    if any(
+        status == "failed"
+        for status in timing_statuses
+    ):
+
+        return _make_summary(
+            total=1,
+            ready=0,
+            failed=1,
+        )
+
+    if any(
+        status != "passed"
+        for status in timing_statuses
+    ):
+
+        return _make_summary(
+            total=1,
+            ready=0,
+        )
+
+    summary = job.get(
+        "timing_summary",
+        {},
+    )
+
+    if summary.get(
+        "status"
+    ) != "complete":
+
+        return _make_summary(
+            total=1,
+            ready=0,
+        )
+
+    if summary.get(
+        "script_revision_recommended"
+    ):
+
+        return _make_summary(
+            total=1,
+            ready=0,
+            failed=1,
+        )
+
+    return _make_summary(
+        total=1,
+        ready=1,
     )
