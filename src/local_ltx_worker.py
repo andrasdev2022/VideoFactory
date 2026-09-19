@@ -348,7 +348,7 @@ def main() -> int:
             DiffusionPipeline
             .from_pretrained(
                 args.model_id,
-                torch_dtype=
+                dtype=
                     torch.float16,
             )
         )
