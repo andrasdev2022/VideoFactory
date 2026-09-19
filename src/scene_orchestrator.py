@@ -1086,6 +1086,15 @@ def choose_next_action(
         != VIDEO_SEMANTIC_QC_POLICY_VERSION
     ):
 
+        if state.get(
+            "motion_strategy"
+        ) in {
+            "safe_fallback_v1",
+            "safe_fallback_v2",
+        }:
+
+            return ACTION_UPGRADE_SAFE_MOTION_POLICY
+
         return ACTION_VIDEO_SEMANTIC_QC
 
     if (
