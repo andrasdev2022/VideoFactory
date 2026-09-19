@@ -4,6 +4,8 @@ from audio_plan_generator import (
     AudioPlanOutput,
     SoundEffectPlan,
     apply_audio_plan,
+    build_context,
+    filter_effects_for_final_video,
     validate_audio_plan,
 )
 
@@ -141,6 +143,137 @@ class AudioPlanGeneratorTests(
                 in error
                 for error in errors
             )
+        )
+
+
+    def test_static_hold_scene_sfx_is_filtered(
+        self,
+    ):
+
+        job = self.make_job()
+
+        job[
+            "visuals"
+        ] = {
+            "scenes": [
+                {
+                    "scene_id":
+                        1,
+
+                    "motion_strategy":
+                        "still_image_fallback_v1",
+
+                    "semantic_qc_policy": {
+                        "motion_mode":
+                            "static_hold",
+                    },
+
+                    "video": {
+                        "provider":
+                            "local_ffmpeg",
+
+                        "semantic_qc": {
+                            "status":
+                                "passed",
+
+                            "overall_notes":
+                                "Stable static hold.",
+                        },
+                    },
+                },
+                {
+                    "scene_id":
+                        2,
+
+                    "motion_strategy":
+                        "normal",
+
+                    "semantic_qc_policy":
+                        {},
+
+                    "video": {
+                        "provider":
+                            "runway",
+
+                        "semantic_qc": {
+                            "status":
+                                "passed",
+                        },
+                    },
+                },
+            ],
+        }
+
+        effects = [
+            SoundEffectPlan(
+                scene_id=1,
+                effect="puppy lick",
+                offset_sec=1.0,
+                duration_sec=1.0,
+                volume=0.5,
+            ),
+            SoundEffectPlan(
+                scene_id=2,
+                effect="tiny bell",
+                offset_sec=1.0,
+                duration_sec=1.0,
+                volume=0.4,
+            ),
+        ]
+
+        kept, skipped = (
+            filter_effects_for_final_video(
+                job,
+                effects,
+            )
+        )
+
+        self.assertEqual(
+            [
+                effect.scene_id
+                for effect
+                in kept
+            ],
+            [
+                2,
+            ],
+        )
+
+        self.assertEqual(
+            skipped[
+                0
+            ][
+                "scene_id"
+            ],
+            1,
+        )
+
+        context = build_context(
+            job
+        )
+
+        scene_one = next(
+            scene
+            for scene in context[
+                "scenes"
+            ]
+            if scene[
+                "scene_id"
+            ]
+            == 1
+        )
+
+        self.assertFalse(
+            scene_one[
+                "sfx_allowed"
+            ]
+        )
+
+        self.assertEqual(
+            scene_one[
+                "motion_mode"
+            ],
+            "static_hold",
         )
 
 
