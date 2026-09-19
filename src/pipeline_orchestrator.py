@@ -448,10 +448,24 @@ def run_worker(
             state_value="running",
         )
 
+    # When stdout is piped through Tee-Object, Python may
+    # otherwise block-buffer the parent while child output appears
+    # immediately. Flush here and force unbuffered child Python so
+    # the combined pipeline log preserves chronological order.
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    child_env = os.environ.copy()
+
+    child_env[
+        "PYTHONUNBUFFERED"
+    ] = "1"
+
     completed = subprocess.run(
         command,
         cwd=PROJECT_ROOT,
         check=False,
+        env=child_env,
     )
 
     if completed.returncode == 0:
@@ -1064,6 +1078,23 @@ def run_pipeline(
 
 
 def main() -> int:
+
+    try:
+
+        sys.stdout.reconfigure(
+            line_buffering=True,
+        )
+
+        sys.stderr.reconfigure(
+            line_buffering=True,
+        )
+
+    except (
+        AttributeError,
+        ValueError,
+    ):
+
+        pass
 
     print("=" * 72)
     print("VIDEO FACTORY - MASTER PIPELINE ORCHESTRATOR v1")
