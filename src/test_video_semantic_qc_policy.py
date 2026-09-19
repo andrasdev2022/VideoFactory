@@ -4,6 +4,7 @@ from video_semantic_qc import (
     CharacterVideoQC,
     VideoSemanticQCOutput,
     evaluate_result,
+    get_evaluation_duration,
 )
 
 
@@ -80,6 +81,55 @@ def make_result(
 class VideoSemanticQCPolicyTests(
     unittest.TestCase
 ):
+
+    def test_evaluation_duration_uses_final_trim_window(
+        self,
+    ):
+
+        scene = {
+            "video": {
+                "target_render_duration_sec":
+                    7.1,
+
+                "qc": {
+                    "actual": {
+                        "duration_sec":
+                            8.083,
+                    },
+                },
+            },
+        }
+
+        self.assertEqual(
+            get_evaluation_duration(
+                scene
+            ),
+            7.1,
+        )
+
+
+    def test_evaluation_duration_falls_back_to_raw_duration(
+        self,
+    ):
+
+        scene = {
+            "video": {
+                "qc": {
+                    "actual": {
+                        "duration_sec":
+                            8.083,
+                    },
+                },
+            },
+        }
+
+        self.assertEqual(
+            get_evaluation_duration(
+                scene
+            ),
+            8.083,
+        )
+
 
     def test_missing_character_fails_without_exit_policy(
         self,
