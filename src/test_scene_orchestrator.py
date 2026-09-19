@@ -372,7 +372,7 @@ class SceneOrchestratorTests(
         )
 
 
-    def test_old_safe_v2_qc_refreshes_policy_before_recheck(
+    def test_old_safe_v2_qc_goes_directly_to_local_fallback(
         self,
     ):
 
@@ -397,7 +397,7 @@ class SceneOrchestratorTests(
 
         self.assertEqual(
             action,
-            ACTION_UPGRADE_SAFE_MOTION_POLICY,
+            ACTION_LOCAL_VIDEO_FALLBACK,
         )
 
 
