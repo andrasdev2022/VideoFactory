@@ -105,9 +105,22 @@ if (-not (Test-Path $PythonExe)) {
     Write-Host ""
     Write-Host "Checking Python $PythonVersion..."
 
-    & py "-$PythonVersion" --version 2>$null
+    $oldErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
 
-    if ($LASTEXITCODE -ne 0) {
+    try {
+
+        & py "-$PythonVersion" --version 2>$null
+        $pythonProbeExitCode = $LASTEXITCODE
+
+    }
+    finally {
+
+        $ErrorActionPreference = $oldErrorActionPreference
+
+    }
+
+    if ($pythonProbeExitCode -ne 0) {
 
         Write-Host (
             "Python $PythonVersion is not installed. " +
@@ -115,8 +128,9 @@ if (-not (Test-Path $PythonExe)) {
         )
 
         & py install $PythonVersion
+        $pythonInstallExitCode = $LASTEXITCODE
 
-        if ($LASTEXITCODE -ne 0) {
+        if ($pythonInstallExitCode -ne 0) {
             throw (
                 "Automatic Python $PythonVersion installation failed. " +
                 "Run 'py install $PythonVersion' manually and rerun setup."
