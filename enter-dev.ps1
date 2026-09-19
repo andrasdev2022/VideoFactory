@@ -2,6 +2,7 @@
 # VIDEO FACTORY - DEVELOPMENT ENVIRONMENT
 # ============================================================
 
+$PreviousErrorActionPreference = $ErrorActionPreference
 $ErrorActionPreference = "Stop"
 
 # Keep Python/native-process output Unicode-safe when piped through
@@ -45,6 +46,7 @@ if (-not (Test-Path $ActivateScript)) {
     Write-Host "ERROR: Python virtual environment not found:"
     Write-Host "  $ActivateScript"
 
+    $ErrorActionPreference = $PreviousErrorActionPreference
     return
 }
 
@@ -430,3 +432,8 @@ Write-Host "============================================================"
 Write-Host " VIDEO FACTORY ENVIRONMENT READY"
 Write-Host "============================================================"
 Write-Host ""
+
+# This script is dot-sourced. Restore the caller error policy so
+# warnings written by native/Python processes are not promoted to
+# terminating NativeCommandError exceptions in the interactive shell.
+$ErrorActionPreference = $PreviousErrorActionPreference
