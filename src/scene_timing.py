@@ -557,7 +557,7 @@ def process_scene(
 def main() -> int:
 
     print("=" * 60)
-    print("VIDEO FACTORY - SCENE TIMING v1")
+    print("VIDEO FACTORY - SCENE TIMING v2")
     print("=" * 60)
 
     args = parse_args()
@@ -735,18 +735,32 @@ def main() -> int:
         )
     )
 
-    set_legacy_status_from_stage(
-        job,
-        "scene_timing",
-    )
+    summary = job[
+        "timing_summary"
+    ]
+
+    if (
+        summary.get(
+            "status"
+        )
+        == "complete"
+    ):
+
+        set_legacy_status_from_stage(
+            job,
+            "global_timing",
+        )
+
+    else:
+
+        set_legacy_status_from_stage(
+            job,
+            "scene_timing",
+        )
 
     save_job_atomic(
         job
     )
-
-    summary = job[
-        "timing_summary"
-    ]
 
     print(
         "\n" + "=" * 60

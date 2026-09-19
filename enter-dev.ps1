@@ -313,6 +313,10 @@ $env:VOICE_QC_MIN_SAMPLE_RATE = "22050"
 $env:SCRIPT_REWRITE_VOICE_SAFETY_SEC = "0.35"
 $env:SCRIPT_REWRITE_MAX_ATTEMPTS = "3"
 
+$env:SCRIPT_DURATION_REWRITE_MAX_ATTEMPTS = "3"
+$env:SCRIPT_DURATION_PROTECT_HOOK_MAX_SEC = "3.5"
+$env:SCRIPT_DURATION_SHORTEN_TEXT_SAFETY = "0.97"
+
 # ------------------------------------------------------------
 # READY
 # ------------------------------------------------------------

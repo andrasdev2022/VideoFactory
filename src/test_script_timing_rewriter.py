@@ -214,9 +214,17 @@ class ScriptTimingRewriterTests(
         job = {
 
             "script": {
+                "voiceover":
+                    "stale top-level narration",
+
                 "scenes": [
                     scene
                 ],
+            },
+
+            "timing_summary": {
+                "status":
+                    "failed",
             },
 
             "visuals": {
@@ -310,6 +318,23 @@ class ScriptTimingRewriterTests(
                 ]
             ),
             1,
+        )
+
+        self.assertEqual(
+            job[
+                "script"
+            ][
+                "voiceover"
+            ],
+            (
+                "This voiceover is shorter "
+                "and fits naturally."
+            ),
+        )
+
+        self.assertNotIn(
+            "timing_summary",
+            job,
         )
 
 

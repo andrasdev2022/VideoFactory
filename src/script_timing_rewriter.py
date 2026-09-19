@@ -867,11 +867,58 @@ def apply_rewrite(
             None,
         )
 
+    # Keep the script-level narration synchronized with
+    # the authoritative per-scene voiceovers.
+
+    script = job.setdefault(
+        "script",
+        {},
+    )
+
+    combined_voiceover: list[str] = []
+
+    for script_scene in script.get(
+        "scenes",
+        [],
+    ):
+
+        try:
+
+            _, text = (
+                get_rewritable_voice_field(
+                    script_scene
+                )
+            )
+
+        except RuntimeError:
+
+            continue
+
+        combined_voiceover.append(
+            text
+        )
+
+    script[
+        "voiceover"
+    ] = " ".join(
+        combined_voiceover
+    )
+
+    script.pop(
+        "duration_normalization",
+        None,
+    )
+
+    job.pop(
+        "timing_summary",
+        None,
+    )
+
 
 def main() -> int:
 
     print("=" * 60)
-    print("VIDEO FACTORY - SCRIPT TIMING REWRITER v1")
+    print("VIDEO FACTORY - SCRIPT TIMING REWRITER v2")
     print("=" * 60)
 
     args = parse_args()
