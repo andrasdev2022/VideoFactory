@@ -39,7 +39,7 @@ GENERATED_STATUSES = {
 
 
 VIDEO_SEMANTIC_QC_POLICY_VERSION = (
-    "target_window_v2"
+    "target_window_v3_dupcheck"
 )
 
 
@@ -1081,10 +1081,35 @@ def choose_next_action(
         )
     )
 
+    # Repeated Runway recovery is exhausted. If the
+    # scene already used safe_fallback_v2, do not spend another
+    # vision pass trying to salvage a manually invalid artifact.
+    # Switch directly to the deterministic local fallback.
+
+    if (
+        video_semantic_qc
+        == "failed"
+        and state.get(
+            "motion_strategy"
+        )
+        == "safe_fallback_v2"
+    ):
+
+        return ACTION_LOCAL_VIDEO_FALLBACK
+
+    if (
+        video_semantic_qc
+        == "failed"
+        and state.get(
+            "motion_strategy"
+        )
+        == "still_image_fallback_v1"
+    ):
+
+        return ACTION_STOP_VIDEO
+
     # A failed semantic result from an older QC policy must be
-    # re-evaluated before spending another generation attempt.
-    # target_window_v2 evaluates only the part of the provider
-    # clip that will actually survive exact trimming.
+    # re-evaluated before spending another provider attempt.
 
     if (
         video_semantic_qc
