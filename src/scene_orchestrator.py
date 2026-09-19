@@ -87,6 +87,10 @@ ACTION_UPGRADE_SAFE_MOTION_POLICY = (
     "upgrade_safe_motion_policy"
 )
 
+ACTION_LOCAL_VIDEO_FALLBACK = (
+    "local_video_fallback"
+)
+
 ACTION_COMPLETE = (
     "complete"
 )
@@ -331,6 +335,11 @@ def inspect_scene_state(
         "video_status":
             video.get(
                 "status"
+            ),
+
+        "video_provider":
+            video.get(
+                "provider"
             ),
 
         "video_file":
@@ -1137,6 +1146,15 @@ def choose_next_action(
             == "safe_fallback_v2"
         ):
 
+            return ACTION_LOCAL_VIDEO_FALLBACK
+
+        if (
+            state.get(
+                "motion_strategy"
+            )
+            == "still_image_fallback_v1"
+        ):
+
             return ACTION_STOP_VIDEO
 
         if (
@@ -1698,7 +1716,7 @@ def print_scene_state(
 def main() -> int:
 
     print("=" * 60)
-    print("VIDEO FACTORY - SCENE ORCHESTRATOR v6")
+    print("VIDEO FACTORY - SCENE ORCHESTRATOR v7")
     print("=" * 60)
 
     args = parse_args()
@@ -2924,6 +2942,99 @@ def main() -> int:
                 print(
                     "\nERROR: video generation "
                     "with safe motion fallback failed."
+                )
+
+                return 1
+
+            continue
+
+        # =================================================
+        # LOCAL DETERMINISTIC VIDEO FALLBACK
+        # =================================================
+
+        if (
+            action
+            == ACTION_LOCAL_VIDEO_FALLBACK
+        ):
+
+            print(
+                "\nRunway recovery exhausted."
+            )
+
+            print(
+                "Strategy change: deterministic "
+                "local still-image video fallback."
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                state,
+                action=
+                    ACTION_LOCAL_VIDEO_FALLBACK,
+                result="started",
+                details={
+                    "video_attempts":
+                        video_attempts,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            rc = run_worker(
+                "scene_video_fallback.py",
+                [
+                    "--scene",
+                    str(
+                        args.scene
+                    ),
+
+                    "--force",
+                ],
+            )
+
+            job = load_json(
+                JOB_FILE
+            )
+
+            fallback_state = (
+                inspect_scene_state(
+                    job,
+                    args.scene,
+                )
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                fallback_state,
+                action=
+                    ACTION_LOCAL_VIDEO_FALLBACK,
+                result=(
+                    "completed"
+                    if rc == 0
+                    else "worker_failed"
+                ),
+                details={
+                    "return_code":
+                        rc,
+
+                    "runway_attempts_preserved":
+                        video_attempts,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            if rc != 0:
+
+                print(
+                    "\nERROR: local deterministic "
+                    "video fallback failed."
                 )
 
                 return 1
