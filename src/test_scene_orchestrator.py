@@ -11,6 +11,7 @@ from scene_orchestrator import (
     ACTION_STOP_IMAGE,
     ACTION_STOP_TIMING,
     ACTION_STOP_VIDEO,
+    ACTION_TRIM_VIDEO,
     ACTION_VIDEO_QC,
     ACTION_VIDEO_SEMANTIC_QC,
     choose_next_action,
@@ -30,6 +31,8 @@ def make_state(
     video_file=None,
     video_qc=None,
     video_semantic_qc=None,
+    trimmed_status=None,
+    trimmed_file=None,
 ):
 
     return {
@@ -65,6 +68,12 @@ def make_state(
 
         "video_semantic_qc":
             video_semantic_qc,
+
+        "trimmed_status":
+            trimmed_status,
+
+        "trimmed_file":
+            trimmed_file,
     }
 
 
@@ -289,6 +298,32 @@ class SceneOrchestratorTests(
         )
 
 
+    def test_passed_semantic_video_needs_exact_trim(
+        self,
+    ):
+
+        action = self.choose(
+            make_state(
+                image_status="generated",
+                image_file="scene.png",
+                image_qc="passed",
+                image_semantic_qc="passed",
+
+                video_status="generated",
+                video_file="scene.mp4",
+                video_qc="passed",
+                video_semantic_qc="passed",
+            ),
+            image_attempts=1,
+            video_attempts=1,
+        )
+
+        self.assertEqual(
+            action,
+            ACTION_TRIM_VIDEO,
+        )
+
+
     def test_first_semantic_failure_uses_qc_retry(
         self,
     ):
@@ -382,6 +417,8 @@ class SceneOrchestratorTests(
                 video_file="scene.mp4",
                 video_qc="passed",
                 video_semantic_qc="passed",
+                trimmed_status="passed",
+                trimmed_file="trimmed/scene.mp4",
             ),
             image_attempts=1,
             video_attempts=1,
