@@ -1,0 +1,2128 @@
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+import json
+import os
+
+from pathlib import Path
+from typing import Any
+from validator import load_json
+from datetime import datetime, timezone
+
+PROJECT_ROOT = (
+    Path(__file__)
+    .resolve()
+    .parent
+    .parent
+)
+
+SRC_DIR = (
+    PROJECT_ROOT
+    / "src"
+)
+
+JOB_FILE = (
+    PROJECT_ROOT
+    / "jobs"
+    / "video_job.json"
+)
+
+
+GENERATED_STATUSES = {
+    "generated",
+    "completed",
+    "passed",
+}
+
+
+ACTION_GENERATE_IMAGE = (
+    "generate_image"
+)
+
+ACTION_IMAGE_QC = (
+    "image_qc"
+)
+
+ACTION_IMAGE_SEMANTIC_QC = (
+    "image_semantic_qc"
+)
+
+ACTION_GENERATE_VIDEO = (
+    "generate_video"
+)
+
+ACTION_VIDEO_QC = (
+    "video_qc"
+)
+
+ACTION_VIDEO_SEMANTIC_QC = (
+    "video_semantic_qc"
+)
+
+ACTION_RETRY_VIDEO_FROM_QC = (
+    "retry_video_from_qc"
+)
+
+ACTION_REGENERATE_MOTION = (
+    "regenerate_motion"
+)
+
+ACTION_COMPLETE = (
+    "complete"
+)
+
+ACTION_STOP_IMAGE = (
+    "stop_image_attempts"
+)
+
+ACTION_STOP_VIDEO = (
+    "stop_video_attempts"
+)
+
+
+def parse_args() -> argparse.Namespace:
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run the Video Factory pipeline "
+            "for one scene."
+        )
+    )
+
+    parser.add_argument(
+        "--scene",
+        type=int,
+        required=True,
+        help=(
+            "Scene ID to process. "
+            "Example: --scene 2"
+        ),
+    )
+
+    parser.add_argument(
+        "--max-image-attempts",
+        type=int,
+        default=2,
+        help=(
+            "Maximum image generations for "
+            "the scene. Default: 2"
+        ),
+    )
+
+    parser.add_argument(
+        "--max-video-attempts",
+        type=int,
+        default=3,
+        help=(
+            "Maximum video generations for "
+            "the scene. Default: 3"
+        ),
+    )
+
+    parser.add_argument(
+        "--reset-attempts",
+        action="store_true",
+        help=(
+            "Reset the persistent image/video attempt "
+            "counters for this scene before processing."
+        ),
+    )
+
+    args = parser.parse_args()
+
+    if args.max_image_attempts < 1:
+
+        parser.error(
+            "--max-image-attempts "
+            "must be at least 1."
+        )
+
+    if args.max_video_attempts < 1:
+
+        parser.error(
+            "--max-video-attempts "
+            "must be at least 1."
+        )
+
+    return args
+
+
+def find_script_scene(
+    job: dict,
+    scene_id: int,
+) -> dict | None:
+
+    for scene in (
+        job
+        .get(
+            "script",
+            {},
+        )
+        .get(
+            "scenes",
+            [],
+        )
+    ):
+
+        if (
+            scene.get("scene_id")
+            == scene_id
+        ):
+
+            return scene
+
+    return None
+
+
+def find_visual_scene(
+    job: dict,
+    scene_id: int,
+) -> dict | None:
+
+    for scene in (
+        job
+        .get(
+            "visuals",
+            {},
+        )
+        .get(
+            "scenes",
+            [],
+        )
+    ):
+
+        if (
+            scene.get("scene_id")
+            == scene_id
+        ):
+
+            return scene
+
+    return None
+
+
+def inspect_scene_state(
+    job: dict,
+    scene_id: int,
+) -> dict[str, Any]:
+
+    scene = find_visual_scene(
+        job,
+        scene_id,
+    )
+
+    if scene is None:
+
+        raise RuntimeError(
+            f"Visual scene {scene_id} "
+            f"does not exist."
+        )
+
+    image = scene.get(
+        "image",
+        {},
+    )
+
+    video = scene.get(
+        "video",
+        {},
+    )
+
+    image_qc = image.get(
+        "qc",
+        {},
+    )
+
+    image_semantic_qc = image.get(
+        "semantic_qc",
+        {},
+    )
+
+    video_qc = video.get(
+        "qc",
+        {},
+    )
+
+    video_semantic_qc = video.get(
+        "semantic_qc",
+        {},
+    )
+
+    return {
+
+        "image_status":
+            image.get(
+                "status"
+            ),
+
+        "image_file":
+            image.get(
+                "file"
+            ),
+
+        "image_qc":
+            image_qc.get(
+                "status"
+            ),
+
+        "image_semantic_qc":
+            image_semantic_qc.get(
+                "status"
+            ),
+
+        "video_status":
+            video.get(
+                "status"
+            ),
+
+        "video_file":
+            video.get(
+                "file"
+            ),
+
+        "video_qc":
+            video_qc.get(
+                "status"
+            ),
+
+        "video_semantic_qc":
+            video_semantic_qc.get(
+                "status"
+            ),
+    }
+
+
+def image_is_generated(
+    state: dict[str, Any],
+) -> bool:
+
+    return (
+        state.get("image_status")
+        in GENERATED_STATUSES
+        and bool(
+            state.get(
+                "image_file"
+            )
+        )
+    )
+
+
+def video_is_generated(
+    state: dict[str, Any],
+) -> bool:
+
+    return (
+        state.get("video_status")
+        in GENERATED_STATUSES
+        and bool(
+            state.get(
+                "video_file"
+            )
+        )
+    )
+
+
+def choose_next_action(
+    state: dict[str, Any],
+    image_attempts: int,
+    video_attempts: int,
+    max_image_attempts: int,
+    max_video_attempts: int,
+) -> str:
+
+    # =====================================================
+    # IMAGE
+    # =====================================================
+
+    if not image_is_generated(
+        state
+    ):
+
+        if (
+            image_attempts
+            >= max_image_attempts
+        ):
+
+            return ACTION_STOP_IMAGE
+
+        return ACTION_GENERATE_IMAGE
+
+    # -----------------------------------------------------
+    # Image technical QC
+    # -----------------------------------------------------
+
+    image_qc = state.get(
+        "image_qc"
+    )
+
+    if image_qc != "passed":
+
+        if image_qc == "failed":
+
+            if (
+                image_attempts
+                >= max_image_attempts
+            ):
+
+                return ACTION_STOP_IMAGE
+
+            return ACTION_GENERATE_IMAGE
+
+        return ACTION_IMAGE_QC
+
+    # -----------------------------------------------------
+    # Image semantic QC
+    # -----------------------------------------------------
+
+    image_semantic_qc = (
+        state.get(
+            "image_semantic_qc"
+        )
+    )
+
+    if (
+        image_semantic_qc
+        != "passed"
+    ):
+
+        if (
+            image_semantic_qc
+            == "failed"
+        ):
+
+            if (
+                image_attempts
+                >= max_image_attempts
+            ):
+
+                return ACTION_STOP_IMAGE
+
+            return ACTION_GENERATE_IMAGE
+
+        return ACTION_IMAGE_SEMANTIC_QC
+
+    # =====================================================
+    # VIDEO
+    # =====================================================
+
+    if not video_is_generated(
+        state
+    ):
+
+        if (
+            video_attempts
+            >= max_video_attempts
+        ):
+
+            return ACTION_STOP_VIDEO
+
+        return ACTION_GENERATE_VIDEO
+
+    # -----------------------------------------------------
+    # Video technical QC
+    # -----------------------------------------------------
+
+    video_qc = state.get(
+        "video_qc"
+    )
+
+    if video_qc != "passed":
+
+        if video_qc == "failed":
+
+            if (
+                video_attempts
+                >= max_video_attempts
+            ):
+
+                return ACTION_STOP_VIDEO
+
+            return ACTION_GENERATE_VIDEO
+
+        return ACTION_VIDEO_QC
+
+    # -----------------------------------------------------
+    # Video semantic QC
+    # -----------------------------------------------------
+
+    video_semantic_qc = (
+        state.get(
+            "video_semantic_qc"
+        )
+    )
+
+    if (
+        video_semantic_qc
+        == "passed"
+    ):
+
+        return ACTION_COMPLETE
+
+    if (
+        video_semantic_qc
+        == "failed"
+    ):
+
+        if (
+            video_attempts
+            >= max_video_attempts
+        ):
+
+            return ACTION_STOP_VIDEO
+
+        # First generated video failed semantic QC.
+        #
+        # Retry using the semantic QC feedback.
+
+        if video_attempts <= 1:
+
+            return (
+                ACTION_RETRY_VIDEO_FROM_QC
+            )
+
+        # Second generated video also failed.
+        #
+        # Do not blindly retry the same strategy.
+        # Generate a simpler motion prompt.
+
+        return ACTION_REGENERATE_MOTION
+
+    return ACTION_VIDEO_SEMANTIC_QC
+
+
+def infer_initial_attempts(
+    state: dict[str, Any],
+) -> tuple[int, int]:
+
+    image_attempts = 0
+    video_attempts = 0
+
+    if (
+        state.get(
+            "image_status"
+        )
+        in GENERATED_STATUSES
+        or state.get(
+            "image_status"
+        )
+        == "failed"
+        or state.get(
+            "image_file"
+        )
+    ):
+
+        image_attempts = 1
+
+    if (
+        state.get(
+            "video_status"
+        )
+        in GENERATED_STATUSES
+        or state.get(
+            "video_status"
+        )
+        == "failed"
+        or state.get(
+            "video_file"
+        )
+    ):
+
+        video_attempts = 1
+
+    return (
+        image_attempts,
+        video_attempts,
+    )
+
+def utc_now_iso() -> str:
+
+    return (
+        datetime.now(
+            timezone.utc
+        )
+        .isoformat()
+    )
+
+def save_job_atomic(
+    job: dict,
+) -> None:
+
+    temporary_file = (
+        JOB_FILE.with_name(
+            JOB_FILE.name
+            + ".tmp"
+        )
+    )
+
+    temporary_file.write_text(
+        json.dumps(
+            job,
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    os.replace(
+        temporary_file,
+        JOB_FILE,
+    )
+
+def derive_orchestration_state(
+    observed_state: dict[str, Any],
+) -> str:
+
+    if (
+        observed_state.get(
+            "video_semantic_qc"
+        )
+        == "passed"
+    ):
+
+        return "completed"
+
+    return "in_progress"
+
+def append_orchestration_history(
+    orchestration_scene: dict,
+    action: str,
+    result: str,
+    details: dict[str, Any] | None = None,
+) -> None:
+
+    history = (
+        orchestration_scene
+        .setdefault(
+            "history",
+            [],
+        )
+    )
+
+    entry = {
+        "timestamp":
+            utc_now_iso(),
+
+        "action":
+            action,
+
+        "result":
+            result,
+
+        "image_attempts":
+            orchestration_scene.get(
+                "image_attempts",
+                0,
+            ),
+
+        "video_attempts":
+            orchestration_scene.get(
+                "video_attempts",
+                0,
+            ),
+    }
+
+    if details:
+
+        entry["details"] = details
+
+    history.append(
+        entry
+    )
+
+    # Prevent the job file from growing forever.
+    if len(history) > 100:
+
+        del history[:-100]
+
+def get_or_create_scene_orchestration(
+    job: dict,
+    scene_id: int,
+    observed_state: dict[str, Any],
+) -> dict:
+
+    orchestration = (
+        job.setdefault(
+            "orchestration",
+            {},
+        )
+    )
+
+    scene_states = (
+        orchestration.setdefault(
+            "scenes",
+            {},
+        )
+    )
+
+    scene_key = str(
+        scene_id
+    )
+
+    existing = (
+        scene_states.get(
+            scene_key
+        )
+    )
+
+    if existing is not None:
+
+        existing.setdefault(
+            "image_attempts",
+            0,
+        )
+
+        existing.setdefault(
+            "video_attempts",
+            0,
+        )
+
+        existing.setdefault(
+            "last_action",
+            None,
+        )
+
+        existing.setdefault(
+            "state",
+            derive_orchestration_state(
+                observed_state
+            ),
+        )
+
+        existing.setdefault(
+            "history",
+            [],
+        )
+
+        existing["updated_at"] = (
+            utc_now_iso()
+        )
+
+        return existing
+
+    (
+        inferred_image_attempts,
+        inferred_video_attempts,
+    ) = infer_initial_attempts(
+        observed_state
+    )
+
+    created = {
+        "image_attempts":
+            inferred_image_attempts,
+
+        "video_attempts":
+            inferred_video_attempts,
+
+        "last_action":
+            None,
+
+        "state":
+            derive_orchestration_state(
+                observed_state
+            ),
+
+        "created_at":
+            utc_now_iso(),
+
+        "updated_at":
+            utc_now_iso(),
+
+        "history":
+            [],
+    }
+
+    scene_states[
+        scene_key
+    ] = created
+
+    append_orchestration_history(
+        created,
+        action="state_migration",
+        result="initialized",
+        details={
+            "inferred_from_existing_artifacts":
+                True,
+        },
+    )
+
+    return created
+
+def reset_scene_attempts(
+    job: dict,
+    scene_id: int,
+    observed_state: dict[str, Any],
+) -> dict:
+
+    orchestration_scene = (
+        get_or_create_scene_orchestration(
+            job,
+            scene_id,
+            observed_state,
+        )
+    )
+
+    orchestration_scene[
+        "image_attempts"
+    ] = 0
+
+    orchestration_scene[
+        "video_attempts"
+    ] = 0
+
+    orchestration_scene[
+        "last_action"
+    ] = "reset_attempts"
+
+    orchestration_scene[
+        "state"
+    ] = derive_orchestration_state(
+        observed_state
+    )
+
+    orchestration_scene[
+        "updated_at"
+    ] = utc_now_iso()
+
+    append_orchestration_history(
+        orchestration_scene,
+        action="reset_attempts",
+        result="completed",
+    )
+
+    return orchestration_scene
+
+def start_generation_attempt(
+    job: dict,
+    scene_id: int,
+    observed_state: dict[str, Any],
+    counter_name: str,
+    action: str,
+) -> int:
+
+    if counter_name not in {
+        "image_attempts",
+        "video_attempts",
+    }:
+
+        raise ValueError(
+            f"Unsupported attempt counter: "
+            f"{counter_name}"
+        )
+
+    orchestration_scene = (
+        get_or_create_scene_orchestration(
+            job,
+            scene_id,
+            observed_state,
+        )
+    )
+
+    orchestration_scene[
+        counter_name
+    ] = (
+        orchestration_scene.get(
+            counter_name,
+            0,
+        )
+        + 1
+    )
+
+    orchestration_scene[
+        "last_action"
+    ] = action
+
+    orchestration_scene[
+        "state"
+    ] = "running"
+
+    orchestration_scene[
+        "updated_at"
+    ] = utc_now_iso()
+
+    append_orchestration_history(
+        orchestration_scene,
+        action=action,
+        result="started",
+    )
+
+    return orchestration_scene[
+        counter_name
+    ]
+
+def record_orchestration_result(
+    job: dict,
+    scene_id: int,
+    observed_state: dict[str, Any],
+    action: str,
+    result: str,
+    orchestration_state: str = "in_progress",
+    details: dict[str, Any] | None = None,
+) -> dict:
+
+    scene_state = (
+        get_or_create_scene_orchestration(
+            job,
+            scene_id,
+            observed_state,
+        )
+    )
+
+    scene_state[
+        "last_action"
+    ] = action
+
+    scene_state[
+        "state"
+    ] = orchestration_state
+
+    scene_state[
+        "updated_at"
+    ] = utc_now_iso()
+
+    append_orchestration_history(
+        scene_state,
+        action=action,
+        result=result,
+        details=details,
+    )
+
+    return scene_state
+
+def load_persistent_attempts(
+    job: dict,
+    scene_id: int,
+    observed_state: dict[str, Any],
+) -> tuple[int, int]:
+
+    orchestration_scene = (
+        get_or_create_scene_orchestration(
+            job,
+            scene_id,
+            observed_state,
+        )
+    )
+
+    return (
+        int(
+            orchestration_scene.get(
+                "image_attempts",
+                0,
+            )
+        ),
+        int(
+            orchestration_scene.get(
+                "video_attempts",
+                0,
+            )
+        ),
+    )
+
+def run_worker(
+    script_name: str,
+    arguments: list[str],
+) -> int:
+
+    script_path = (
+        SRC_DIR
+        / script_name
+    )
+
+    command = [
+        sys.executable,
+        str(script_path),
+        *arguments,
+    ]
+
+    print(
+        "\n" + "-" * 60
+    )
+
+    print(
+        "RUN:"
+    )
+
+    print(
+        " ".join(
+            command
+        )
+    )
+
+    print(
+        "-" * 60
+    )
+
+    completed = subprocess.run(
+        command,
+        cwd=PROJECT_ROOT,
+        check=False,
+    )
+
+    return (
+        completed.returncode
+    )
+
+
+def print_scene_state(
+    state: dict[str, Any],
+) -> None:
+
+    print(
+        "\nCurrent scene state:"
+    )
+
+    print(
+        f"  image:             "
+        f"{state.get('image_status')}"
+    )
+
+    print(
+        f"  image QC:          "
+        f"{state.get('image_qc')}"
+    )
+
+    print(
+        f"  image semantic QC: "
+        f"{state.get('image_semantic_qc')}"
+    )
+
+    print(
+        f"  video:             "
+        f"{state.get('video_status')}"
+    )
+
+    print(
+        f"  video QC:          "
+        f"{state.get('video_qc')}"
+    )
+
+    print(
+        f"  video semantic QC: "
+        f"{state.get('video_semantic_qc')}"
+    )
+
+
+def main() -> int:
+
+    print("=" * 60)
+    print("VIDEO FACTORY - SCENE ORCHESTRATOR v2")
+    print("=" * 60)
+
+    args = parse_args()
+
+    # -----------------------------------------------------
+    # Initial job load
+    # -----------------------------------------------------
+
+    try:
+
+        job = load_json(
+            JOB_FILE
+        )
+
+    except Exception as exc:
+
+        print(
+            f"\nERROR loading video_job.json:\n"
+            f"{exc}"
+        )
+
+        return 1
+
+    script_scene = (
+        find_script_scene(
+            job,
+            args.scene,
+        )
+    )
+
+    if script_scene is None:
+
+        print(
+            f"\nERROR: script scene "
+            f"{args.scene} does not exist."
+        )
+
+        return 1
+
+    visual_scene = (
+        find_visual_scene(
+            job,
+            args.scene,
+        )
+    )
+
+    if visual_scene is None:
+
+        print(
+            f"\nERROR: visual scene "
+            f"{args.scene} does not exist."
+        )
+
+        print(
+            "Generate visual prompts first."
+        )
+
+        return 1
+
+    try:
+
+        initial_state = (
+            inspect_scene_state(
+                job,
+                args.scene,
+            )
+        )
+
+    except Exception as exc:
+
+        print(
+            f"\nERROR: {exc}"
+        )
+
+        return 1
+
+    # -----------------------------------------------------
+    # Persistent orchestrator state
+    # -----------------------------------------------------
+
+    if args.reset_attempts:
+
+        orchestration_scene = (
+            reset_scene_attempts(
+                job,
+                args.scene,
+                initial_state,
+            )
+        )
+
+        save_job_atomic(
+            job
+        )
+
+        print(
+            "\nPersistent attempt counters reset."
+        )
+
+    else:
+
+        orchestration_scene = (
+            get_or_create_scene_orchestration(
+                job,
+                args.scene,
+                initial_state,
+            )
+        )
+
+        save_job_atomic(
+            job
+        )
+
+    print(
+        f"\nJob ID: "
+        f"{job.get('job_id')}"
+    )
+
+    print(
+        f"Scene: "
+        f"{args.scene}"
+    )
+
+    print(
+        f"Max image attempts: "
+        f"{args.max_image_attempts}"
+    )
+
+    print(
+        f"Max video attempts: "
+        f"{args.max_video_attempts}"
+    )
+
+    print(
+        f"Persistent image attempts: "
+        f"{orchestration_scene.get('image_attempts', 0)}"
+    )
+
+    print(
+        f"Persistent video attempts: "
+        f"{orchestration_scene.get('video_attempts', 0)}"
+    )
+
+    print_scene_state(
+        initial_state
+    )
+
+    max_orchestrator_steps = 30
+
+    # =====================================================
+    # ORCHESTRATION LOOP
+    # =====================================================
+
+    for step in range(
+        1,
+        max_orchestrator_steps + 1,
+    ):
+
+        try:
+
+            job = load_json(
+                JOB_FILE
+            )
+
+            state = (
+                inspect_scene_state(
+                    job,
+                    args.scene,
+                )
+            )
+
+            (
+                image_attempts,
+                video_attempts,
+            ) = load_persistent_attempts(
+                job,
+                args.scene,
+                state,
+            )
+
+            save_job_atomic(
+                job
+            )
+
+        except Exception as exc:
+
+            print(
+                f"\nERROR reloading job state:\n"
+                f"{exc}"
+            )
+
+            return 1
+
+        action = choose_next_action(
+            state=state,
+            image_attempts=
+                image_attempts,
+            video_attempts=
+                video_attempts,
+            max_image_attempts=
+                args.max_image_attempts,
+            max_video_attempts=
+                args.max_video_attempts,
+        )
+
+        print(
+            f"\n[Step {step}] "
+            f"Next action: {action}"
+        )
+
+        print(
+            f"  image attempts: "
+            f"{image_attempts}/"
+            f"{args.max_image_attempts}"
+        )
+
+        print(
+            f"  video attempts: "
+            f"{video_attempts}/"
+            f"{args.max_video_attempts}"
+        )
+
+        # =================================================
+        # COMPLETE
+        # =================================================
+
+        if action == ACTION_COMPLETE:
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                state,
+                action=ACTION_COMPLETE,
+                result="passed",
+                orchestration_state=
+                    "completed",
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            print_scene_state(
+                state
+            )
+
+            print(
+                "\n" + "=" * 60
+            )
+
+            print(
+                f"SCENE {args.scene} COMPLETE"
+            )
+
+            print(
+                "=" * 60
+            )
+
+            print(
+                f"\nPersistent image generations: "
+                f"{image_attempts}"
+            )
+
+            print(
+                f"Persistent video generations: "
+                f"{video_attempts}"
+            )
+
+            return 0
+
+        # =================================================
+        # STOP IMAGE
+        # =================================================
+
+        if (
+            action
+            == ACTION_STOP_IMAGE
+        ):
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                state,
+                action=ACTION_STOP_IMAGE,
+                result="attempt_limit_reached",
+                orchestration_state=
+                    "failed",
+                details={
+                    "max_image_attempts":
+                        args.max_image_attempts,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            print_scene_state(
+                state
+            )
+
+            print(
+                f"\nERROR: Scene "
+                f"{args.scene} exceeded "
+                f"the maximum number of "
+                f"image attempts "
+                f"({args.max_image_attempts})."
+            )
+
+            return 1
+
+        # =================================================
+        # STOP VIDEO
+        # =================================================
+
+        if (
+            action
+            == ACTION_STOP_VIDEO
+        ):
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                state,
+                action=ACTION_STOP_VIDEO,
+                result="attempt_limit_reached",
+                orchestration_state=
+                    "failed",
+                details={
+                    "max_video_attempts":
+                        args.max_video_attempts,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            print_scene_state(
+                state
+            )
+
+            print(
+                f"\nERROR: Scene "
+                f"{args.scene} exceeded "
+                f"the maximum number of "
+                f"video attempts "
+                f"({args.max_video_attempts})."
+            )
+
+            return 1
+
+        # =================================================
+        # IMAGE GENERATION
+        # =================================================
+
+        if (
+            action
+            == ACTION_GENERATE_IMAGE
+        ):
+
+            current_attempt = (
+                start_generation_attempt(
+                    job,
+                    args.scene,
+                    state,
+                    counter_name=
+                        "image_attempts",
+                    action=
+                        ACTION_GENERATE_IMAGE,
+                )
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            print(
+                f"\nStarting image attempt "
+                f"{current_attempt}/"
+                f"{args.max_image_attempts}"
+            )
+
+            rc = run_worker(
+                "image_generator.py",
+                [
+                    "--mode",
+                    "scene_image",
+
+                    "--scene",
+                    str(
+                        args.scene
+                    ),
+
+                    "--force",
+                ],
+            )
+
+            job = load_json(
+                JOB_FILE
+            )
+
+            new_state = (
+                inspect_scene_state(
+                    job,
+                    args.scene,
+                )
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                new_state,
+                action=
+                    ACTION_GENERATE_IMAGE,
+                result=(
+                    "completed"
+                    if rc == 0
+                    else "worker_failed"
+                ),
+                details={
+                    "return_code":
+                        rc,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            if rc != 0:
+
+                print(
+                    "\nERROR: image generator "
+                    "returned non-zero exit code."
+                )
+
+                return 1
+
+            continue
+
+        # =================================================
+        # IMAGE QC
+        # =================================================
+
+        if (
+            action
+            == ACTION_IMAGE_QC
+        ):
+
+            rc = run_worker(
+                "image_qc.py",
+                [
+                    "--scene",
+                    str(
+                        args.scene
+                    ),
+                ],
+            )
+
+            job = load_json(
+                JOB_FILE
+            )
+
+            new_state = (
+                inspect_scene_state(
+                    job,
+                    args.scene,
+                )
+            )
+
+            qc_result = (
+                new_state.get(
+                    "image_qc"
+                )
+                or "unknown"
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                new_state,
+                action=
+                    ACTION_IMAGE_QC,
+                result=
+                    qc_result,
+                details={
+                    "return_code":
+                        rc,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            continue
+
+        # =================================================
+        # IMAGE SEMANTIC QC
+        # =================================================
+
+        if (
+            action
+            == ACTION_IMAGE_SEMANTIC_QC
+        ):
+
+            rc = run_worker(
+                "image_semantic_qc.py",
+                [
+                    "--scene",
+                    str(
+                        args.scene
+                    ),
+                ],
+            )
+
+            job = load_json(
+                JOB_FILE
+            )
+
+            new_state = (
+                inspect_scene_state(
+                    job,
+                    args.scene,
+                )
+            )
+
+            semantic_result = (
+                new_state.get(
+                    "image_semantic_qc"
+                )
+                or "unknown"
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                new_state,
+                action=
+                    ACTION_IMAGE_SEMANTIC_QC,
+                result=
+                    semantic_result,
+                details={
+                    "return_code":
+                        rc,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            continue
+
+        # =================================================
+        # NORMAL VIDEO GENERATION
+        # =================================================
+
+        if (
+            action
+            == ACTION_GENERATE_VIDEO
+        ):
+
+            current_attempt = (
+                start_generation_attempt(
+                    job,
+                    args.scene,
+                    state,
+                    counter_name=
+                        "video_attempts",
+                    action=
+                        ACTION_GENERATE_VIDEO,
+                )
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            print(
+                f"\nStarting video attempt "
+                f"{current_attempt}/"
+                f"{args.max_video_attempts}"
+            )
+
+            rc = run_worker(
+                "image_to_video_generator.py",
+                [
+                    "--scene",
+                    str(
+                        args.scene
+                    ),
+
+                    "--force",
+                ],
+            )
+
+            job = load_json(
+                JOB_FILE
+            )
+
+            new_state = (
+                inspect_scene_state(
+                    job,
+                    args.scene,
+                )
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                new_state,
+                action=
+                    ACTION_GENERATE_VIDEO,
+                result=(
+                    "completed"
+                    if rc == 0
+                    else "worker_failed"
+                ),
+                details={
+                    "return_code":
+                        rc,
+                    "attempt":
+                        current_attempt,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            if rc != 0:
+
+                print(
+                    "\nERROR: video generator "
+                    "returned non-zero exit code."
+                )
+
+                return 1
+
+            continue
+
+        # =================================================
+        # VIDEO QC
+        # =================================================
+
+        if (
+            action
+            == ACTION_VIDEO_QC
+        ):
+
+            rc = run_worker(
+                "video_qc.py",
+                [
+                    "--scene",
+                    str(
+                        args.scene
+                    ),
+                ],
+            )
+
+            job = load_json(
+                JOB_FILE
+            )
+
+            new_state = (
+                inspect_scene_state(
+                    job,
+                    args.scene,
+                )
+            )
+
+            qc_result = (
+                new_state.get(
+                    "video_qc"
+                )
+                or "unknown"
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                new_state,
+                action=
+                    ACTION_VIDEO_QC,
+                result=
+                    qc_result,
+                details={
+                    "return_code":
+                        rc,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            continue
+
+        # =================================================
+        # VIDEO SEMANTIC QC
+        # =================================================
+
+        if (
+            action
+            == ACTION_VIDEO_SEMANTIC_QC
+        ):
+
+            rc = run_worker(
+                "video_semantic_qc.py",
+                [
+                    "--scene",
+                    str(
+                        args.scene
+                    ),
+                ],
+            )
+
+            job = load_json(
+                JOB_FILE
+            )
+
+            new_state = (
+                inspect_scene_state(
+                    job,
+                    args.scene,
+                )
+            )
+
+            semantic_result = (
+                new_state.get(
+                    "video_semantic_qc"
+                )
+                or "unknown"
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                new_state,
+                action=
+                    ACTION_VIDEO_SEMANTIC_QC,
+                result=
+                    semantic_result,
+                details={
+                    "return_code":
+                        rc,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            continue
+
+        # =================================================
+        # FIRST VIDEO SEMANTIC FAILURE
+        # =================================================
+
+        if (
+            action
+            == ACTION_RETRY_VIDEO_FROM_QC
+        ):
+
+            print(
+                "\nVideo semantic QC failed."
+            )
+
+            print(
+                "Strategy: retry video using "
+                "semantic QC feedback."
+            )
+
+            current_attempt = (
+                start_generation_attempt(
+                    job,
+                    args.scene,
+                    state,
+                    counter_name=
+                        "video_attempts",
+                    action=
+                        ACTION_RETRY_VIDEO_FROM_QC,
+                )
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            print(
+                f"Starting video attempt "
+                f"{current_attempt}/"
+                f"{args.max_video_attempts}"
+            )
+
+            rc = run_worker(
+                "image_to_video_generator.py",
+                [
+                    "--scene",
+                    str(
+                        args.scene
+                    ),
+
+                    "--retry-from-qc",
+                ],
+            )
+
+            job = load_json(
+                JOB_FILE
+            )
+
+            new_state = (
+                inspect_scene_state(
+                    job,
+                    args.scene,
+                )
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                new_state,
+                action=
+                    ACTION_RETRY_VIDEO_FROM_QC,
+                result=(
+                    "completed"
+                    if rc == 0
+                    else "worker_failed"
+                ),
+                details={
+                    "return_code":
+                        rc,
+                    "attempt":
+                        current_attempt,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            if rc != 0:
+
+                print(
+                    "\nERROR: QC-based video "
+                    "retry failed."
+                )
+
+                return 1
+
+            continue
+
+        # =================================================
+        # SECOND VIDEO SEMANTIC FAILURE
+        # =================================================
+
+        if (
+            action
+            == ACTION_REGENERATE_MOTION
+        ):
+
+            print(
+                "\nVideo semantic QC failed again."
+            )
+
+            print(
+                "Strategy change: regenerate "
+                "a simpler motion prompt."
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                state,
+                action=
+                    ACTION_REGENERATE_MOTION,
+                result="started",
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            rc = run_worker(
+                "visual_prompt_generator.py",
+                [
+                    "--scene",
+                    str(
+                        args.scene
+                    ),
+
+                    "--motion-only",
+
+                    "--force",
+                ],
+            )
+
+            if rc != 0:
+
+                job = load_json(
+                    JOB_FILE
+                )
+
+                new_state = (
+                    inspect_scene_state(
+                        job,
+                        args.scene,
+                    )
+                )
+
+                record_orchestration_result(
+                    job,
+                    args.scene,
+                    new_state,
+                    action=
+                        ACTION_REGENERATE_MOTION,
+                    result=
+                        "worker_failed",
+                    orchestration_state=
+                        "failed",
+                    details={
+                        "return_code":
+                            rc,
+                    },
+                )
+
+                save_job_atomic(
+                    job
+                )
+
+                print(
+                    "\nERROR: motion-only prompt "
+                    "regeneration failed."
+                )
+
+                return 1
+
+            # Motion-only has invalidated the old video.
+            # Reload before counting the next expensive
+            # generation attempt.
+
+            job = load_json(
+                JOB_FILE
+            )
+
+            new_state = (
+                inspect_scene_state(
+                    job,
+                    args.scene,
+                )
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                new_state,
+                action=
+                    ACTION_REGENERATE_MOTION,
+                result="completed",
+                details={
+                    "return_code":
+                        rc,
+                },
+            )
+
+            current_attempt = (
+                start_generation_attempt(
+                    job,
+                    args.scene,
+                    new_state,
+                    counter_name=
+                        "video_attempts",
+                    action=
+                        ACTION_GENERATE_VIDEO,
+                )
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            print(
+                f"\nStarting video attempt "
+                f"{current_attempt}/"
+                f"{args.max_video_attempts}"
+            )
+
+            rc = run_worker(
+                "image_to_video_generator.py",
+                [
+                    "--scene",
+                    str(
+                        args.scene
+                    ),
+
+                    "--force",
+                ],
+            )
+
+            job = load_json(
+                JOB_FILE
+            )
+
+            final_state = (
+                inspect_scene_state(
+                    job,
+                    args.scene,
+                )
+            )
+
+            record_orchestration_result(
+                job,
+                args.scene,
+                final_state,
+                action=
+                    ACTION_GENERATE_VIDEO,
+                result=(
+                    "completed"
+                    if rc == 0
+                    else "worker_failed"
+                ),
+                details={
+                    "return_code":
+                        rc,
+                    "attempt":
+                        current_attempt,
+                    "after_motion_regeneration":
+                        True,
+                },
+            )
+
+            save_job_atomic(
+                job
+            )
+
+            if rc != 0:
+
+                print(
+                    "\nERROR: video generation "
+                    "after motion regeneration "
+                    "failed."
+                )
+
+                return 1
+
+            continue
+
+        # =================================================
+        # UNKNOWN ACTION
+        # =================================================
+
+        record_orchestration_result(
+            job,
+            args.scene,
+            state,
+            action=str(
+                action
+            ),
+            result="unknown_action",
+            orchestration_state=
+                "failed",
+        )
+
+        save_job_atomic(
+            job
+        )
+
+        print(
+            f"\nERROR: unknown orchestrator "
+            f"action: {action}"
+        )
+
+        return 1
+
+    # -----------------------------------------------------
+    # Internal loop protection
+    # -----------------------------------------------------
+
+    job = load_json(
+        JOB_FILE
+    )
+
+    state = (
+        inspect_scene_state(
+            job,
+            args.scene,
+        )
+    )
+
+    record_orchestration_result(
+        job,
+        args.scene,
+        state,
+        action=
+            "orchestrator_step_limit",
+        result=
+            "step_limit_reached",
+        orchestration_state=
+            "failed",
+    )
+
+    save_job_atomic(
+        job
+    )
+
+    print(
+        "\nERROR: orchestrator exceeded "
+        "maximum internal step count."
+    )
+
+    return 1
+
+if __name__ == "__main__":
+
+    raise SystemExit(
+        main()
+    )

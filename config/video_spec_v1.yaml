@@ -1,0 +1,128 @@
+version: "1.0"
+
+video:
+  type: "short"
+  aspect_ratio: "9:16"
+  target_duration_sec: 30
+  min_duration_sec: 20
+  max_duration_sec: 45
+  language: "en"
+  resolution: "1080x1920"
+  fps: 30
+
+content:
+  genre: "absurd_comedy"
+  target_audience: "general"
+  style: "fast_paced"
+  originality_required: true
+
+  structure:
+    hook:
+      duration_sec: 3
+      purpose: "immediately capture attention"
+
+    setup:
+      duration_sec: 7
+      purpose: "establish situation"
+
+    escalation:
+      duration_sec: 12
+      purpose: "increase absurdity/conflict"
+
+    payoff:
+      duration_sec: 6
+      purpose: "unexpected ending or punchline"
+
+    cta:
+      duration_sec: 2
+      purpose: "optional engagement prompt"
+
+  scene_count:
+    min: 4
+    max: 7
+
+visual:
+  style:
+    consistency: "high"
+    cinematic: true
+    realistic: false
+    style_description: >
+      colorful surreal comedy, exaggerated expressions,
+      cinematic lighting, visually clear subjects
+
+  characters:
+    consistency_required: true
+
+  scene:
+    min_duration_sec: 3
+    max_duration_sec: 8
+
+audio:
+  voiceover:
+    required: true
+    gender: "any"
+    style: "energetic"
+    speed: "natural"
+
+  background_music:
+    required: true
+    volume_relative_to_voice: 0.20
+
+  sound_effects:
+    enabled: true
+
+subtitles:
+  enabled: true
+  language: "en"
+  burned_in: true
+  max_lines: 2
+  max_chars_per_line: 32
+
+metadata:
+  title:
+    max_length: 100
+
+  description:
+    required: true
+
+  hashtags:
+    min: 3
+    max: 8
+
+platforms:
+  youtube_shorts:
+    enabled: true
+
+  tiktok:
+    enabled: true
+
+  instagram_reels:
+    enabled: true
+
+  facebook_reels:
+    enabled: true
+
+quality:
+  technical:
+    resolution_required: "1080x1920"
+    audio_required: true
+    max_file_size_mb: 100
+
+  content:
+    hook_required: true
+    ending_required: true
+    no_unresolved_story: true
+    no_unintentional_text: true
+    character_consistency_required: true
+
+output:
+  video_format: "mp4"
+  video_codec: "h264"
+  audio_codec: "aac"
+
+  files:
+    video: true
+    subtitles: true
+    thumbnail: true
+    script: true
+    metadata: true

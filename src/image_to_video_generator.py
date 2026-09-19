@@ -1,0 +1,1319 @@
+from __future__ import annotations
+
+from pathlib import Path
+import argparse
+import base64
+import json
+import os
+import sys
+import urllib.request
+
+from runwayml import RunwayML
+from validator import load_json
+from pipeline_status import set_legacy_status_from_stage
+
+# ---------------------------------------------------------
+# PATHS
+# ---------------------------------------------------------
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+JOB_FILE = PROJECT_ROOT / "jobs" / "video_job.json"
+
+
+# ---------------------------------------------------------
+# CONFIG
+# ---------------------------------------------------------
+
+VIDEO_MODEL = os.getenv(
+    "RUNWAY_VIDEO_MODEL",
+    "gen4_turbo",
+)
+
+VIDEO_RATIO = os.getenv(
+    "RUNWAY_VIDEO_RATIO",
+    "720:1280",
+)
+
+TASK_TIMEOUT_SEC = int(
+    os.getenv(
+        "RUNWAY_TASK_TIMEOUT_SEC",
+        "600",
+    )
+)
+
+MIN_DURATION_SEC = 2
+MAX_DURATION_SEC = 10
+
+
+# ---------------------------------------------------------
+# CLI
+# ---------------------------------------------------------
+
+def parse_args() -> argparse.Namespace:
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Video Factory image-to-video generator"
+        )
+    )
+
+    parser.add_argument(
+        "--scene",
+        type=int,
+        default=None,
+        help=(
+            "Generate only one scene. "
+            "Example: --scene 2"
+        ),
+    )
+
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Regenerate video even if "
+            "the MP4 already exists."
+        ),
+    )
+
+    parser.add_argument(
+        "--retry-from-qc",
+        action="store_true",
+        help=(
+            "Regenerate a failed video using feedback "
+            "from semantic video QC."
+        ),
+    )
+
+    return parser.parse_args()
+
+
+# ---------------------------------------------------------
+# JSON SAVE
+# ---------------------------------------------------------
+
+def save_job(job: dict) -> None:
+
+    temp_file = JOB_FILE.with_name(
+        JOB_FILE.name + ".tmp"
+    )
+
+    with temp_file.open(
+        "w",
+        encoding="utf-8",
+    ) as file:
+
+        json.dump(
+            job,
+            file,
+            indent=2,
+            ensure_ascii=False,
+        )
+
+        file.write("\n")
+
+    temp_file.replace(
+        JOB_FILE
+    )
+
+
+# ---------------------------------------------------------
+# LOOKUPS
+# ---------------------------------------------------------
+
+def find_scene(
+    job: dict,
+    scene_id: int,
+) -> dict | None:
+
+    for scene in job.get(
+        "visuals",
+        {},
+    ).get(
+        "scenes",
+        [],
+    ):
+
+        if scene.get("scene_id") == scene_id:
+            return scene
+
+    return None
+
+
+# ---------------------------------------------------------
+# DATA URI
+# ---------------------------------------------------------
+
+def image_to_data_uri(
+    image_path: Path,
+) -> str:
+
+    suffix = image_path.suffix.lower()
+
+    mime_types = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+    }
+
+    mime_type = mime_types.get(
+        suffix
+    )
+
+    if mime_type is None:
+
+        raise RuntimeError(
+            f"Unsupported image format: {suffix}"
+        )
+
+    with image_path.open(
+        "rb"
+    ) as file:
+
+        encoded = base64.b64encode(
+            file.read()
+        ).decode(
+            "ascii"
+        )
+
+    return (
+        f"data:{mime_type};base64,"
+        f"{encoded}"
+    )
+
+
+# ---------------------------------------------------------
+# OUTPUT PATH
+# ---------------------------------------------------------
+
+def get_video_output_path(
+    job: dict,
+    scene: dict,
+) -> Path:
+
+    job_id = job["job_id"]
+    scene_id = scene["scene_id"]
+
+    return (
+        PROJECT_ROOT
+        / "output"
+        / job_id
+        / "videos"
+        / f"scene_{scene_id:03d}.mp4"
+    )
+
+
+# ---------------------------------------------------------
+# PRECONDITIONS
+# ---------------------------------------------------------
+
+def validate_scene_preconditions(
+    job: dict,
+    scene: dict,
+) -> list[str]:
+
+    errors: list[str] = []
+
+    scene_id = scene["scene_id"]
+
+    image = scene.get(
+        "image",
+        {},
+    )
+
+    # -----------------------------------------------------
+    # Technical QC
+    # -----------------------------------------------------
+
+    technical_qc_status = (
+        image
+        .get(
+            "qc",
+            {},
+        )
+        .get(
+            "status"
+        )
+    )
+
+    if technical_qc_status != "passed":
+
+        errors.append(
+            f"Scene {scene_id}: technical "
+            f"image QC has not passed."
+        )
+
+    # -----------------------------------------------------
+    # Semantic QC
+    # -----------------------------------------------------
+
+    semantic_qc_status = (
+        image
+        .get(
+            "semantic_qc",
+            {},
+        )
+        .get(
+            "status"
+        )
+    )
+
+    if semantic_qc_status != "passed":
+
+        errors.append(
+            f"Scene {scene_id}: semantic "
+            f"image QC has not passed."
+        )
+
+    # -----------------------------------------------------
+    # Image file
+    # -----------------------------------------------------
+
+    if not image.get(
+        "file"
+    ):
+
+        errors.append(
+            f"Scene {scene_id}: "
+            f"image.file is missing."
+        )
+
+    # -----------------------------------------------------
+    # Motion prompt
+    # -----------------------------------------------------
+
+    if not scene.get(
+        "motion_prompt"
+    ):
+
+        errors.append(
+            f"Scene {scene_id}: "
+            f"motion_prompt is missing."
+        )
+
+    # -----------------------------------------------------
+    # Duration
+    # -----------------------------------------------------
+
+    duration = get_scene_duration(
+        job,
+        scene_id,
+    )
+
+    if duration is None:
+
+        errors.append(
+            f"Scene {scene_id}: "
+            f"duration_sec is missing."
+        )
+
+    elif not (
+        MIN_DURATION_SEC
+        <= duration
+        <= MAX_DURATION_SEC
+    ):
+
+        errors.append(
+            f"Scene {scene_id}: "
+            f"duration {duration}s is outside "
+            f"supported range "
+            f"{MIN_DURATION_SEC}-"
+            f"{MAX_DURATION_SEC}s."
+        )
+
+    return errors
+
+
+# ---------------------------------------------------------
+# BUILD MOTION PROMPT
+# ---------------------------------------------------------
+
+MAX_RUNWAY_PROMPT_CHARS = 1000
+SAFE_RUNWAY_PROMPT_CHARS = 900
+
+
+def build_video_prompt(
+    job: dict,
+    scene: dict,
+    use_qc_feedback: bool = False,
+) -> str:
+
+    motion_prompt = (
+        scene.get(
+            "motion_prompt",
+            ""
+        )
+        .strip()
+    )
+
+    continuity_notes = (
+        scene.get(
+            "continuity_notes",
+            ""
+        )
+        .strip()
+    )
+
+    parts: list[str] = []
+
+    # -----------------------------------------------------
+    # Main requested motion
+    # -----------------------------------------------------
+
+    if motion_prompt:
+
+        parts.append(
+            motion_prompt
+        )
+
+    # -----------------------------------------------------
+    # Previous QC correction
+    # -----------------------------------------------------
+
+    if use_qc_feedback:
+
+        correction = build_qc_correction(
+            job,
+            scene,
+        )
+
+        if correction:
+
+            parts.append(
+                "Correction from previous attempt: "
+                + correction
+            )
+
+    # -----------------------------------------------------
+    # Continuity
+    # -----------------------------------------------------
+
+    if continuity_notes:
+
+        parts.append(
+            f"Continuity: {continuity_notes}"
+        )
+
+    parts.append(
+        "Maintain character identity and appearance. "
+        "Natural controlled motion. "
+        "One continuous shot."
+    )
+
+    prompt = " ".join(
+        parts
+    )
+
+    # -----------------------------------------------------
+    # Runway safety limit
+    # -----------------------------------------------------
+
+    if len(prompt) > SAFE_RUNWAY_PROMPT_CHARS:
+
+        prompt = (
+            prompt[
+                :SAFE_RUNWAY_PROMPT_CHARS
+            ]
+            .rsplit(
+                " ",
+                1,
+            )[0]
+            .rstrip(
+                " ,.;:"
+            )
+            + "."
+        )
+
+    if len(prompt) > MAX_RUNWAY_PROMPT_CHARS:
+
+        raise RuntimeError(
+            f"Runway prompt too long: "
+            f"{len(prompt)} chars."
+        )
+
+    return prompt
+
+
+# ---------------------------------------------------------
+# DOWNLOAD VIDEO
+# ---------------------------------------------------------
+
+def download_file(
+    url: str,
+    output_file: Path,
+) -> None:
+
+    output_file.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    temp_file = output_file.with_suffix(
+        output_file.suffix + ".tmp"
+    )
+
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent":
+                "VideoFactory/1.0"
+        },
+    )
+
+    with urllib.request.urlopen(
+        request,
+        timeout=120,
+    ) as response:
+
+        with temp_file.open(
+            "wb"
+        ) as file:
+
+            while True:
+
+                chunk = response.read(
+                    1024 * 1024
+                )
+
+                if not chunk:
+                    break
+
+                file.write(
+                    chunk
+                )
+
+    if (
+        not temp_file.exists()
+        or temp_file.stat().st_size == 0
+    ):
+
+        raise RuntimeError(
+            "Downloaded video file is empty."
+        )
+
+    temp_file.replace(
+        output_file
+    )
+
+
+# ---------------------------------------------------------
+# GENERATE ONE VIDEO
+# ---------------------------------------------------------
+
+def generate_scene_video(
+    client: RunwayML,
+    job: dict,
+    scene: dict,
+    force: bool,
+    retry_from_qc: bool,
+) -> bool:
+
+    scene_id = scene[
+        "scene_id"
+    ]
+
+    # -----------------------------------------------------
+    # QC RETRY
+    # -----------------------------------------------------
+
+    if retry_from_qc:
+
+        semantic_qc_status = (
+            scene
+            .get(
+                "video",
+                {},
+            )
+            .get(
+                "semantic_qc",
+                {},
+            )
+            .get(
+                "status"
+            )
+        )
+
+        if semantic_qc_status != "failed":
+
+            raise RuntimeError(
+                f"Scene {scene_id}: --retry-from-qc requested, "
+                f"but semantic QC status is "
+                f"'{semantic_qc_status}'."
+            )
+
+        # A QC retry always creates a new artifact.
+        force = True
+
+    # -----------------------------------------------------
+    # Preconditions
+    # -----------------------------------------------------
+
+    errors = (
+        validate_scene_preconditions(
+            job,
+            scene,
+        )
+    )
+
+    if errors:
+
+        raise RuntimeError(
+            "\n".join(
+                errors
+            )
+        )
+
+    # -----------------------------------------------------
+    # Input image
+    # -----------------------------------------------------
+
+    image_file = (
+        scene["image"]["file"]
+    )
+
+    image_path = (
+        PROJECT_ROOT
+        / image_file
+    )
+
+    if not image_path.exists():
+
+        raise RuntimeError(
+            f"Scene {scene_id}: "
+            f"input image does not exist: "
+            f"{image_file}"
+        )
+
+    # -----------------------------------------------------
+    # Output video
+    # -----------------------------------------------------
+
+    output_file = (
+        get_video_output_path(
+            job,
+            scene,
+        )
+    )
+
+    # -----------------------------------------------------
+    # Existing artifact
+    # -----------------------------------------------------
+
+    if (
+        output_file.exists()
+        and not force
+    ):
+
+        print(
+            f"  SKIP: Scene {scene_id} "
+            f"video already exists."
+        )
+
+        video = scene.setdefault(
+            "video",
+            {},
+        )
+
+        video["status"] = (
+            "generated"
+        )
+
+        video["file"] = str(
+            output_file.relative_to(
+                PROJECT_ROOT
+            )
+        ).replace(
+            "\\",
+            "/",
+        )
+
+        return False
+
+    # -----------------------------------------------------
+    # Build Runway request
+    # -----------------------------------------------------
+
+    prompt_image = (
+        image_to_data_uri(
+            image_path
+        )
+    )
+
+    prompt_text = (
+        build_video_prompt(
+            job=job,
+            scene=scene,
+            use_qc_feedback=retry_from_qc,
+        )
+    )
+
+    duration = get_scene_duration(
+        job,
+        scene_id,
+    )
+
+    if duration is None:
+
+        raise RuntimeError(
+            f"Scene {scene_id}: duration not found "
+            f"in script.scenes."
+        )
+
+    duration = int(
+        duration
+    )
+
+    print(
+        f"\nGenerating scene {scene_id}"
+    )
+
+    print(
+        f"  Model:        {VIDEO_MODEL}"
+    )
+
+    print(
+        f"  Duration:     {duration}s"
+    )
+
+    print(
+        f"  Ratio:        {VIDEO_RATIO}"
+    )
+
+    print(
+        f"  Input:        {image_file}"
+    )
+
+    print(
+        f"  Prompt chars: "
+        f"{len(prompt_text)}"
+    )
+
+    if retry_from_qc:
+
+        correction = (
+            build_qc_correction(
+                job,
+                scene,
+            )
+        )
+
+        print(
+            "  QC retry:     YES"
+        )
+
+        print(
+            f"  Correction:   "
+            f"{correction}"
+        )
+
+    # -----------------------------------------------------
+    # Runway generation
+    # -----------------------------------------------------
+
+    task = (
+        client
+        .image_to_video
+        .create(
+            model=VIDEO_MODEL,
+            prompt_image=prompt_image,
+            prompt_text=prompt_text,
+            ratio=VIDEO_RATIO,
+            duration=duration,
+        )
+        .wait_for_task_output(
+            timeout=TASK_TIMEOUT_SEC,
+        )
+    )
+
+    # -----------------------------------------------------
+    # Validate provider output
+    # -----------------------------------------------------
+
+    if not task.output:
+
+        raise RuntimeError(
+            f"Scene {scene_id}: "
+            f"Runway task returned no output."
+        )
+
+    video_url = task.output[0]
+
+    if not video_url:
+
+        raise RuntimeError(
+            f"Scene {scene_id}: "
+            f"Runway returned empty video URL."
+        )
+
+    # -----------------------------------------------------
+    # Download immediately
+    # -----------------------------------------------------
+
+    download_file(
+        video_url,
+        output_file,
+    )
+
+    if not output_file.exists():
+
+        raise RuntimeError(
+            f"Scene {scene_id}: "
+            f"downloaded video does not exist."
+        )
+
+    file_size = (
+        output_file
+        .stat()
+        .st_size
+    )
+
+    relative_video_path = str(
+        output_file.relative_to(
+            PROJECT_ROOT
+        )
+    ).replace(
+        "\\",
+        "/",
+    )
+
+    # -----------------------------------------------------
+    # IMPORTANT:
+    #
+    # Replace the complete video metadata block.
+    #
+    # This intentionally destroys QC results belonging
+    # to the previous video artifact.
+    # -----------------------------------------------------
+
+    scene["video"] = {
+
+        "status":
+            "generated",
+
+        "file":
+            relative_video_path,
+
+        "provider":
+            "runway",
+
+        "model":
+            VIDEO_MODEL,
+
+        "ratio":
+            VIDEO_RATIO,
+
+        "duration_sec":
+            duration,
+
+        "source_image":
+            image_file,
+
+        "task_id":
+            str(task.id),
+
+        "file_size_bytes":
+            file_size,
+
+        # The NEW artifact has not been checked yet.
+        "qc": {
+            "status": "pending",
+        },
+
+        "semantic_qc": {
+            "status": "pending",
+        },
+    }
+
+    print(
+        f"  Saved:        "
+        f"{relative_video_path}"
+    )
+
+    print(
+        f"  Bytes:        "
+        f"{file_size:,}"
+    )
+
+    return True
+
+# ---------------------------------------------------------
+# ALL GENERATED?
+# ---------------------------------------------------------
+
+def all_scene_videos_generated(
+    job: dict,
+) -> bool:
+
+    scenes = job.get(
+        "visuals",
+        {},
+    ).get(
+        "scenes",
+        [],
+    )
+
+    if not scenes:
+        return False
+
+    for scene in scenes:
+
+        video = scene.get(
+            "video",
+            {},
+        )
+
+        if (
+            video.get("status")
+            != "generated"
+        ):
+
+            return False
+
+        video_file = video.get(
+            "file"
+        )
+
+        if not video_file:
+            return False
+
+        path = (
+            PROJECT_ROOT
+            / video_file
+        )
+
+        if not path.exists():
+            return False
+
+    return True
+
+
+def get_scene_duration(
+    job: dict,
+    scene_id: int,
+) -> int | None:
+
+    for script_scene in job.get(
+        "script",
+        {},
+    ).get(
+        "scenes",
+        [],
+    ):
+
+        if script_scene.get("scene_id") == scene_id:
+            return script_scene.get("duration_sec")
+
+    return None
+
+def build_qc_correction(
+    job: dict,
+    scene: dict,
+) -> str:
+
+    qc = (
+        scene
+        .get("video", {})
+        .get("semantic_qc", {})
+    )
+
+    if qc.get("status") != "failed":
+        return ""
+
+    corrections: list[str] = []
+
+    if not qc.get(
+        "motion_matches_prompt",
+        True,
+    ):
+        corrections.append(
+            "Follow the requested motion exactly."
+        )
+
+    if not qc.get(
+        "temporal_progression_coherent",
+        True,
+    ):
+        corrections.append(
+            "Maintain continuous chronological motion; "
+            "no teleporting, disappearing, or reappearing."
+        )
+
+    if not qc.get(
+        "source_frame_continuity_ok",
+        True,
+    ):
+        corrections.append(
+            "Remain visually close to the supplied opening frame."
+        )
+
+    if qc.get(
+        "morphing_or_shape_drift",
+        False,
+    ):
+        corrections.append(
+            "Keep body shape and identity stable."
+        )
+
+    if qc.get(
+        "unexpected_scene_cut",
+        False,
+    ):
+        corrections.append(
+            "Use one continuous shot with no scene cuts."
+        )
+
+    # -----------------------------------------------------
+    # Character-specific corrections
+    # -----------------------------------------------------
+
+    for check in qc.get(
+        "characters",
+        [],
+    ):
+
+        character_id = check.get(
+            "character_id"
+        )
+
+        character_name = character_id
+
+        for character in job.get(
+            "characters",
+            [],
+        ):
+
+            if (
+                character.get("character_id")
+                == character_id
+            ):
+
+                character_name = character.get(
+                    "name",
+                    character_id,
+                )
+
+                break
+
+        if not check.get(
+            "present_throughout",
+            True,
+        ):
+            corrections.append(
+                f"{character_name} must remain continuously visible "
+                f"in approximately the same screen position for the "
+                f"entire shot. Do not move {character_name} out of frame."
+            )
+
+        if not check.get(
+            "identity_stable",
+            True,
+        ):
+
+            corrections.append(
+                f"Keep {character_name}'s identity stable."
+            )
+
+        if not check.get(
+            "appearance_stable",
+            True,
+        ):
+
+            corrections.append(
+                f"Keep {character_name}'s appearance unchanged."
+            )
+
+        if not check.get(
+            "clothing_stable",
+            True,
+        ):
+
+            corrections.append(
+                f"Keep {character_name}'s clothing unchanged."
+            )
+
+    if not corrections:
+        return ""
+
+    return " ".join(
+        corrections
+    )
+
+# ---------------------------------------------------------
+# MAIN
+# ---------------------------------------------------------
+
+def main() -> int:
+
+    print("=" * 60)
+    print("VIDEO FACTORY - IMAGE TO VIDEO GENERATOR v1")
+    print("=" * 60)
+
+    args = parse_args()
+
+    # -----------------------------------------------------
+    # API secret
+    # -----------------------------------------------------
+
+    if not os.getenv(
+        "RUNWAYML_API_SECRET"
+    ):
+
+        print(
+            "\nERROR: RUNWAYML_API_SECRET "
+            "environment variable is not set."
+        )
+
+        return 1
+
+    # -----------------------------------------------------
+    # Load job
+    # -----------------------------------------------------
+
+    try:
+
+        job = load_json(
+            JOB_FILE
+        )
+
+    except Exception as exc:
+
+        print(
+            f"\nERROR loading video_job.json:\n"
+            f"{exc}"
+        )
+
+        return 1
+
+    scenes = (
+        job
+        .get(
+            "visuals",
+            {},
+        )
+        .get(
+            "scenes",
+            [],
+        )
+    )
+
+    if not scenes:
+
+        print(
+            "\nERROR: no visual scenes found."
+        )
+
+        return 1
+
+    # -----------------------------------------------------
+    # Select scenes
+    # -----------------------------------------------------
+
+    if args.scene is not None:
+
+        scene = find_scene(
+            job,
+            args.scene,
+        )
+
+        if scene is None:
+
+            print(
+                f"\nERROR: scene "
+                f"{args.scene} not found."
+            )
+
+            return 1
+
+        selected_scenes = [
+            scene
+        ]
+
+    else:
+
+        selected_scenes = scenes
+
+    print(
+        f"\nJob ID: {job.get('job_id')}"
+    )
+
+    print(
+        f"Model:  {VIDEO_MODEL}"
+    )
+
+    print(
+        f"Scenes: {len(selected_scenes)}"
+    )
+
+    # -----------------------------------------------------
+    # Client
+    # -----------------------------------------------------
+
+    client = RunwayML()
+
+    generated_count = 0
+    failed_count = 0
+
+    # -----------------------------------------------------
+    # Generate
+    # -----------------------------------------------------
+
+    for scene in selected_scenes:
+
+        scene_id = (
+            scene["scene_id"]
+        )
+
+        try:
+
+            generated = (
+                generate_scene_video(
+                    client=client,
+                    job=job,
+                    scene=scene,
+                    force=args.force,
+                    retry_from_qc=
+                        args.retry_from_qc,
+                )
+            )
+
+            if generated:
+
+                generated_count += 1
+
+            # ---------------------------------------------
+            # Current pipeline stage becomes authoritative.
+            # ---------------------------------------------
+
+            set_legacy_status_from_stage(
+                job,
+                "scene_videos",
+            )
+
+            save_job(
+                job
+            )
+
+        except Exception as exc:
+
+            failed_count += 1
+
+            print(
+                f"\nERROR generating "
+                f"scene {scene_id}:\n"
+                f"{exc}"
+            )
+
+            # ---------------------------------------------
+            # Replace old artifact metadata.
+            #
+            # We must NOT preserve QC results belonging
+            # to an older MP4.
+            # ---------------------------------------------
+
+            scene["video"] = {
+
+                "status":
+                    "failed",
+
+                "error":
+                    str(exc),
+
+                "qc": {
+                    "status":
+                        "pending",
+                },
+
+                "semantic_qc": {
+                    "status":
+                        "pending",
+                },
+            }
+
+            set_legacy_status_from_stage(
+                job,
+                "scene_videos",
+            )
+
+            save_job(
+                job
+            )
+
+            # Video generation is expensive.
+            # Stop on first provider/generation error.
+
+            return 1
+
+    # -----------------------------------------------------
+    # Final pipeline status
+    # -----------------------------------------------------
+
+    set_legacy_status_from_stage(
+        job,
+        "scene_videos",
+    )
+
+    save_job(
+        job
+    )
+
+    # -----------------------------------------------------
+    # Summary
+    # -----------------------------------------------------
+
+    stage = (
+        job["pipeline_status"]
+        ["scene_videos"]
+    )
+
+    print(
+        "\n" + "=" * 60
+    )
+
+    print(
+        "IMAGE TO VIDEO GENERATION COMPLETE"
+    )
+
+    print(
+        "=" * 60
+    )
+
+    print(
+        f"\nNew videos generated: "
+        f"{generated_count}"
+    )
+
+    print(
+        f"Failed: "
+        f"{failed_count}"
+    )
+
+    print(
+        f"Stage state: "
+        f"{stage['state']}"
+    )
+
+    print(
+        f"Ready: "
+        f"{stage['ready']}/"
+        f"{stage['total']}"
+    )
+
+    print(
+        f"Pending: "
+        f"{stage['pending']}"
+    )
+
+    print(
+        f"Job status: "
+        f"{job.get('status')}"
+    )
+
+    return 0
+
+if __name__ == "__main__":
+
+    sys.exit(
+        main()
+    )

@@ -1,0 +1,1154 @@
+{
+  "job_id": "20260918-000001",
+  "spec_version": "1.0",
+  "created_at": "2026-09-18T10:00:00Z",
+  "status": "scene_timing_passed",
+  "idea": {
+    "idea_id": "idea-000001",
+    "title": "My Cat Just Fired Me",
+    "concept": "An ordinary office worker discovers that his cat has somehow become the CEO of his company.",
+    "genre": "absurd_comedy",
+    "target_audience": "general",
+    "hook": "My cat fired me this morning.",
+    "core_joke": "The cat behaves like a ruthless corporate CEO while everyone else treats the situation as completely normal.",
+    "ending": "The employee gets fired by the cat and immediately receives a LinkedIn connection request from it.",
+    "originality": {
+      "is_original": true,
+      "source_material": null
+    }
+  },
+  "characters": [
+    {
+      "character_id": "char-001",
+      "name": "Mike",
+      "role": "main_character",
+      "description": "A tired 35-year-old office worker, short brown hair, glasses, blue shirt, dark trousers.",
+      "personality": "confused, nervous, ordinary",
+      "visual_consistency_key": "mike_v1",
+      "reference": {
+        "status": "generated",
+        "prompt": "Canonical character reference image of Mike, a tired 35-year-old office worker with short brown hair, glasses, a blue shirt, and dark trousers. Show him clearly in a full-body three-quarter view, standing in a relaxed neutral pose with hands visible. Use a colorful surreal comedy aesthetic with stylized, non-realistic proportions, clean readable shapes, and subtle exaggerated facial features while preserving his ordinary, nervous office-worker identity. Bright cinematic office-style lighting, bright corporate color palette, simple neutral background, uncluttered composition, consistent character-design sheet quality, no environment details, no other characters.",
+        "negative_prompt": "Photorealism, realism, young or elderly appearance, long or styled hair, hair colors other than short brown hair, missing glasses, incorrect shirt color, missing blue shirt, trousers in an incorrect color, shorts, suit, tie, uniforms, hats, extra accessories, altered body type, muscular physique, fantasy traits, animal traits, duplicate character, extra limbs, extra fingers, deformed hands, cropped body, extreme action pose, extreme emotion, dark or muddy lighting, busy office background, text, captions, logos, watermarks, inconsistent clothing, inconsistent hairstyle.",
+        "visual_signature": "Tired 35-year-old office worker with short brown hair, glasses, blue shirt, and dark trousers.",
+        "image_file": "output/20260918-000001/characters/char-001/reference.png",
+        "planned_image_file": "output/20260918-000001/characters/char-001/reference.png",
+        "model": "gpt-image-2.5-flare",
+        "quality": "low",
+        "size": "1024x1536"
+      }
+    },
+    {
+      "character_id": "char-002",
+      "name": "Mr. Whiskers",
+      "role": "antagonist",
+      "description": "A fluffy orange tabby cat wearing a tiny black business suit and red tie.",
+      "personality": "serious, confident, ruthless CEO",
+      "visual_consistency_key": "whiskers_v1",
+      "reference": {
+        "status": "generated",
+        "prompt": "Canonical character reference image of Mr. Whiskers, a fluffy orange tabby cat wearing a tiny black business suit and red tie. Show the entire cat clearly in a full-body three-quarter view, standing in a composed neutral pose with paws and clothing visible. Use a colorful surreal comedy aesthetic with stylized, non-realistic proportions, expressive but controlled feline features, clean readable fur markings, and a polished ruthless-CEO character-design feel. Bright cinematic office-style lighting, bright corporate color palette, simple neutral background, uncluttered composition, consistent character-reference quality, no environment details, no other characters.",
+        "negative_prompt": "Photorealistic cat, non-orange fur, non-tabby markings, short-haired or hairless cat, missing fluffy fur, missing black business suit, missing red tie, incorrect tie color, human body, human face, extra clothing, hat, glasses, additional accessories, duplicate cat, extra limbs, extra paws, deformed anatomy, cropped body, action pose, busy office background, text, captions, logos, watermarks, dark or muddy lighting, inconsistent fur pattern, inconsistent suit or tie.",
+        "visual_signature": "Fluffy orange tabby cat in a tiny black business suit with a red tie.",
+        "image_file": "output/20260918-000001/characters/char-002/reference.png",
+        "planned_image_file": "output/20260918-000001/characters/char-002/reference.png",
+        "model": "gpt-image-2.5-flare",
+        "quality": "low",
+        "size": "1024x1536"
+      }
+    }
+  ],
+  "style": {
+    "visual": "colorful surreal comedy",
+    "cinematic": true,
+    "realistic": false,
+    "lighting": "bright cinematic office lighting",
+    "camera": "dynamic but readable",
+    "color_palette": "bright corporate colors",
+    "consistency_required": true
+  },
+  "script": {
+    "target_duration_sec": 30,
+    "voiceover": "My cat fired me this morning. I thought it was a joke—until I walked into the office and saw him in the CEO chair. Mr. Whiskers had called an emergency meeting. He reviewed my performance, knocked my coffee onto the floor, and promoted himself to Chief Executive Officer. Then he presented a slideshow titled, “Why Mike Is Bad at Synergy.” Every employee nodded like this happened daily. I begged for another chance, but he pushed a tiny termination letter across the desk. Fired by my own cat. I packed my things while he scheduled a nap during my old lunch break. Then, before I even reached the elevator, my phone buzzed. Mr. Whiskers had sent me a LinkedIn connection request. Apparently, he still wants to network.",
+    "scenes": [
+      {
+        "scene_id": 1,
+        "type": "hook",
+        "duration_sec": 3,
+        "voiceover": "My cat fired me this morning.",
+        "visual": {
+          "description": "Vertical cinematic close-up in a bright corporate office: Mike, a tired office worker with short brown hair and glasses, stares in horror at a formal termination letter held in his shaking hands. A fluffy orange tabby cat in a tiny black suit and red tie sits on the desk behind him like a powerful executive. Colorful surreal comedy, exaggerated expressions.",
+          "characters": [
+            "char-001",
+            "char-002"
+          ],
+          "camera": "Fast push-in from the termination letter to Mike's stunned face, then rack focus to the suited cat.",
+          "emotion": "Immediate shock and disbelief"
+        },
+        "text_overlay": "MY CAT FIRED ME",
+        "voice": {
+          "status": "generated",
+          "file": "output/20260918-000001/audio/voice/scene_001.wav",
+          "provider": "openai",
+          "model": "gpt-4o-mini-tts",
+          "voice": "marin",
+          "format": "wav",
+          "speed": 1.0,
+          "source_field": "voiceover",
+          "input_text": "My cat fired me this morning.",
+          "instructions": "Speak in en. Use a energetic delivery suitable for short-form social media. Use a natural conversational speaking pace. Do not rush the delivery to fit a time limit. Keep pauses natural and expressive. Sound clear, punchy, engaging, and human. Maintain the same narrator identity and vocal character across scenes. Do not add, remove, paraphrase, or repeat words. Read exactly the supplied text.",
+          "planned_scene_duration_sec": 3.0,
+          "file_size_bytes": 124844,
+          "qc": {
+            "status": "passed",
+            "checked_at": "2026-09-19T12:14:42.218299+00:00",
+            "expected": {
+              "planned_scene_duration_sec": 3.0,
+              "min_duration_sec": 0.2,
+              "min_file_size_bytes": 5000,
+              "min_sample_rate": 22050,
+              "timing_policy": "Voice duration does not fail QC for exceeding planned scene duration. Video timing adapts to natural voice."
+            },
+            "actual": {
+              "has_audio_stream": true,
+              "codec": "pcm_s16le",
+              "codec_long_name": "PCM signed 16-bit little-endian",
+              "sample_rate": 24000,
+              "channels": 1,
+              "channel_layout": null,
+              "sample_fmt": "s16",
+              "duration_sec": 2.6,
+              "bit_rate": 384000,
+              "file_size_bytes": 124844
+            },
+            "errors": [],
+            "warnings": []
+          }
+        },
+        "planned_duration_sec": 3.0,
+        "timing": {
+          "status": "passed",
+          "planned_duration_sec": 3.0,
+          "voice_duration_sec": 2.6,
+          "headroom_sec": 0.3,
+          "raw_render_duration_sec": 2.9,
+          "render_duration_sec": 2.9,
+          "min_video_duration_sec": 2.0,
+          "max_video_duration_sec": 10.0,
+          "script_revision_required": false,
+          "errors": [],
+          "warnings": []
+        }
+      },
+      {
+        "scene_id": 2,
+        "type": "setup",
+        "duration_sec": 7,
+        "voiceover": "I thought it was a joke—until I walked into the office and saw him in the CEO chair. Mr. Whiskers had called an emergency meeting.",
+        "visual": {
+          "description": "Wide view of a colorful open-plan office transformed into a CEO boardroom. Mr. Whiskers sits behind an oversized executive desk in a large leather chair, paws on a polished desk, while Mike stands frozen in the doorway. Office workers sit around a conference table, calmly facing the cat as if his leadership is completely normal. Bright cinematic office lighting.",
+          "characters": [
+            "char-001",
+            "char-002"
+          ],
+          "camera": "Tracking shot follows Mike entering, then tilts up dramatically to reveal the cat's oversized CEO chair.",
+          "emotion": "Mike is confused; the office workers are bizarrely calm; the cat is authoritative"
+        },
+        "text_overlay": "EMERGENCY MEETING",
+        "voice": {
+          "status": "generated",
+          "file": "output/20260918-000001/audio/voice/scene_002.wav",
+          "provider": "openai",
+          "model": "gpt-4o-mini-tts",
+          "voice": "marin",
+          "format": "wav",
+          "speed": 1.0,
+          "source_field": "voiceover",
+          "input_text": "I thought it was a joke—until I walked into the office and saw him in the CEO chair. Mr. Whiskers had called an emergency meeting.",
+          "instructions": "Speak in en. Use a energetic delivery suitable for short-form social media. Use a natural conversational speaking pace. Do not rush the delivery to fit a time limit. Keep pauses natural and expressive. Sound clear, punchy, engaging, and human. Maintain the same narrator identity and vocal character across scenes. Do not add, remove, paraphrase, or repeat words. Read exactly the supplied text.",
+          "planned_scene_duration_sec": 7.0,
+          "file_size_bytes": 379244,
+          "qc": {
+            "status": "passed",
+            "checked_at": "2026-09-19T12:17:57.210259+00:00",
+            "expected": {
+              "planned_scene_duration_sec": 7.0,
+              "min_duration_sec": 0.2,
+              "min_file_size_bytes": 5000,
+              "min_sample_rate": 22050,
+              "timing_policy": "Voice duration does not fail QC for exceeding planned scene duration. Video timing adapts to natural voice."
+            },
+            "actual": {
+              "has_audio_stream": true,
+              "codec": "pcm_s16le",
+              "codec_long_name": "PCM signed 16-bit little-endian",
+              "sample_rate": 24000,
+              "channels": 1,
+              "channel_layout": null,
+              "sample_fmt": "s16",
+              "duration_sec": 7.9,
+              "bit_rate": 384000,
+              "file_size_bytes": 379244
+            },
+            "errors": [],
+            "warnings": [
+              "Natural voice is 0.900s longer than the originally planned scene. Scene timing must adapt."
+            ]
+          }
+        },
+        "planned_duration_sec": 7.0,
+        "timing": {
+          "status": "passed",
+          "planned_duration_sec": 7.0,
+          "voice_duration_sec": 7.9,
+          "headroom_sec": 0.3,
+          "raw_render_duration_sec": 8.2,
+          "render_duration_sec": 8.2,
+          "min_video_duration_sec": 2.0,
+          "max_video_duration_sec": 10.0,
+          "script_revision_required": false,
+          "errors": [],
+          "warnings": [
+            "Render duration differs from the original scene plan by +1.200s."
+          ]
+        }
+      },
+      {
+        "scene_id": 3,
+        "type": "escalation",
+        "duration_sec": 6,
+        "voiceover": "He reviewed my performance, knocked my coffee onto the floor, and promoted himself to Chief Executive Officer.",
+        "visual": {
+          "description": "Mr. Whiskers conducts a ruthless performance review from the desk. He paws a stack of charts toward Mike, then casually swats Mike's coffee onto the floor without breaking eye contact. A gold nameplate on the desk identifies the cat as CEO without relying on any image-generated text; the office workers applaud solemnly.",
+          "characters": [
+            "char-001",
+            "char-002"
+          ],
+          "camera": "Quick cuts between the cat's narrowed eyes, the falling coffee cup, and Mike's horrified reaction; low angle on the cat.",
+          "emotion": "Escalating corporate intimidation and absurd seriousness"
+        },
+        "text_overlay": "PROMOTED: CEO",
+        "voice": {
+          "status": "generated",
+          "file": "output/20260918-000001/audio/voice/scene_003.wav",
+          "provider": "openai",
+          "model": "gpt-4o-mini-tts",
+          "voice": "marin",
+          "format": "wav",
+          "speed": 1.0,
+          "source_field": "voiceover",
+          "input_text": "He reviewed my performance, knocked my coffee onto the floor, and promoted himself to Chief Executive Officer.",
+          "instructions": "Speak in en. Use a energetic delivery suitable for short-form social media. Use a natural conversational speaking pace. Do not rush the delivery to fit a time limit. Keep pauses natural and expressive. Sound clear, punchy, engaging, and human. Maintain the same narrator identity and vocal character across scenes. Do not add, remove, paraphrase, or repeat words. Read exactly the supplied text.",
+          "planned_scene_duration_sec": 6.0,
+          "file_size_bytes": 309644,
+          "qc": {
+            "status": "passed",
+            "checked_at": "2026-09-19T12:18:11.032614+00:00",
+            "expected": {
+              "planned_scene_duration_sec": 6.0,
+              "min_duration_sec": 0.2,
+              "min_file_size_bytes": 5000,
+              "min_sample_rate": 22050,
+              "timing_policy": "Voice duration does not fail QC for exceeding planned scene duration. Video timing adapts to natural voice."
+            },
+            "actual": {
+              "has_audio_stream": true,
+              "codec": "pcm_s16le",
+              "codec_long_name": "PCM signed 16-bit little-endian",
+              "sample_rate": 24000,
+              "channels": 1,
+              "channel_layout": null,
+              "sample_fmt": "s16",
+              "duration_sec": 6.45,
+              "bit_rate": 384000,
+              "file_size_bytes": 309644
+            },
+            "errors": [],
+            "warnings": [
+              "Natural voice is 0.450s longer than the originally planned scene. Scene timing must adapt."
+            ]
+          }
+        },
+        "planned_duration_sec": 6.0,
+        "timing": {
+          "status": "passed",
+          "planned_duration_sec": 6.0,
+          "voice_duration_sec": 6.45,
+          "headroom_sec": 0.3,
+          "raw_render_duration_sec": 6.75,
+          "render_duration_sec": 6.75,
+          "min_video_duration_sec": 2.0,
+          "max_video_duration_sec": 10.0,
+          "script_revision_required": false,
+          "errors": [],
+          "warnings": []
+        }
+      },
+      {
+        "scene_id": 4,
+        "type": "escalation",
+        "duration_sec": 8,
+        "voiceover": "He presented a slideshow: \"Why Mike Is Bad at Synergy.\" Everyone nodded. I begged again, but he slid a tiny termination letter across the desk.",
+        "visual": {
+          "description": "Surreal boardroom presentation: Mr. Whiskers stands beside a glowing presentation screen showing abstract colorful charts and a cartoonishly declining productivity graph, while Mike pleads beside the conference table. The employees nod in perfect unison. The cat slides a miniature envelope across the polished desk toward Mike with one paw.",
+          "characters": [
+            "char-001",
+            "char-002"
+          ],
+          "camera": "Lateral dolly past synchronized nodding employees, ending in a dramatic close-up of the tiny envelope stopping in front of Mike.",
+          "emotion": "Mike is desperate and humiliated; the cat is coldly efficient; coworkers are eerily approving"
+        },
+        "text_overlay": "PERFORMANCE REVIEW: FAILED",
+        "planned_duration_sec": 8.0,
+        "timing_revisions": [
+          {
+            "timestamp": "2026-09-19T12:43:49.004036+00:00",
+            "reason": "natural_voice_exceeds_scene_limit",
+            "source_field": "voiceover",
+            "old_text": "Then he presented a slideshow titled, “Why Mike Is Bad at Synergy.” Every employee nodded like this happened daily. I begged for another chance, but he pushed a tiny termination letter across the desk.",
+            "new_text": "He presented a slideshow: \"Why Mike Is Bad at Synergy.\" Everyone nodded. I begged again, but he slid a tiny termination letter across the desk.",
+            "old_word_count": 34,
+            "new_word_count": 25,
+            "old_char_count": 201,
+            "new_char_count": 143,
+            "measured_voice_duration_sec": 12.3,
+            "target_voice_duration_sec": 9.35,
+            "max_words": 25,
+            "max_chars": 148
+          }
+        ],
+        "voice": {
+          "status": "generated",
+          "file": "output/20260918-000001/audio/voice/scene_004.wav",
+          "provider": "openai",
+          "model": "gpt-4o-mini-tts",
+          "voice": "marin",
+          "format": "wav",
+          "speed": 1.0,
+          "source_field": "voiceover",
+          "input_text": "He presented a slideshow: \"Why Mike Is Bad at Synergy.\" Everyone nodded. I begged again, but he slid a tiny termination letter across the desk.",
+          "instructions": "Speak in en. Use a energetic delivery suitable for short-form social media. Use a natural conversational speaking pace. Do not rush the delivery to fit a time limit. Keep pauses natural and expressive. Sound clear, punchy, engaging, and human. Maintain the same narrator identity and vocal character across scenes. Do not add, remove, paraphrase, or repeat words. Read exactly the supplied text.",
+          "planned_scene_duration_sec": 8.0,
+          "file_size_bytes": 441644,
+          "qc": {
+            "status": "passed",
+            "checked_at": "2026-09-19T12:44:37.064371+00:00",
+            "expected": {
+              "planned_scene_duration_sec": 8.0,
+              "min_duration_sec": 0.2,
+              "min_file_size_bytes": 5000,
+              "min_sample_rate": 22050,
+              "timing_policy": "Voice duration does not fail QC for exceeding planned scene duration. Video timing adapts to natural voice."
+            },
+            "actual": {
+              "has_audio_stream": true,
+              "codec": "pcm_s16le",
+              "codec_long_name": "PCM signed 16-bit little-endian",
+              "sample_rate": 24000,
+              "channels": 1,
+              "channel_layout": null,
+              "sample_fmt": "s16",
+              "duration_sec": 9.2,
+              "bit_rate": 384000,
+              "file_size_bytes": 441644
+            },
+            "errors": [],
+            "warnings": [
+              "Natural voice is 1.200s longer than the originally planned scene. Scene timing must adapt."
+            ]
+          }
+        },
+        "timing": {
+          "status": "passed",
+          "planned_duration_sec": 8.0,
+          "voice_duration_sec": 9.2,
+          "headroom_sec": 0.3,
+          "raw_render_duration_sec": 9.5,
+          "render_duration_sec": 9.5,
+          "min_video_duration_sec": 2.0,
+          "max_video_duration_sec": 10.0,
+          "script_revision_required": false,
+          "errors": [],
+          "warnings": [
+            "Render duration differs from the original scene plan by +1.500s."
+          ]
+        }
+      },
+      {
+        "scene_id": 5,
+        "type": "payoff",
+        "duration_sec": 6,
+        "voiceover": "Fired by my own cat, I packed up during his nap on my lunch break. Then Mr. Whiskers sent a LinkedIn request: he wants to network.",
+        "visual": {
+          "description": "Mike exits the office carrying a cardboard box with a mug and desk plant, looking defeated. Behind the glass office wall, Mr. Whiskers reclines in the CEO chair and settles into a luxurious cat bed for a nap. Mike's smartphone lights up in his hand with a generic professional networking notification from Mr. Whiskers, while the cat gives a smug wave.",
+          "characters": [
+            "char-001",
+            "char-002"
+          ],
+          "camera": "Follow Mike toward the elevator, whip-pan to the buzzing phone, then punch in on the cat's smug expression.",
+          "emotion": "Defeat turns into stunned absurdity; the cat is victorious and smug"
+        },
+        "text_overlay": "LET'S NETWORK",
+        "planned_duration_sec": 6.0,
+        "timing_revisions": [
+          {
+            "timestamp": "2026-09-19T12:48:22.851126+00:00",
+            "reason": "natural_voice_exceeds_scene_limit",
+            "source_field": "voiceover",
+            "old_text": "Fired by my own cat. I packed my things while he scheduled a nap during my old lunch break. Then my phone buzzed: Mr. Whiskers sent me a LinkedIn connection request. Apparently, he still wants to network.",
+            "new_text": "Fired by my own cat, I packed up during his nap on my lunch break. Then Mr. Whiskers sent a LinkedIn request: he wants to network.",
+            "old_word_count": 37,
+            "new_word_count": 26,
+            "old_char_count": 204,
+            "new_char_count": 130,
+            "measured_voice_duration_sec": 12.75,
+            "target_voice_duration_sec": 9.35,
+            "max_words": 26,
+            "max_chars": 145
+          }
+        ],
+        "voice": {
+          "status": "generated",
+          "file": "output/20260918-000001/audio/voice/scene_005.wav",
+          "provider": "openai",
+          "model": "gpt-4o-mini-tts",
+          "voice": "marin",
+          "format": "wav",
+          "speed": 1.0,
+          "source_field": "voiceover",
+          "input_text": "Fired by my own cat, I packed up during his nap on my lunch break. Then Mr. Whiskers sent a LinkedIn request: he wants to network.",
+          "instructions": "Speak in en. Use a energetic delivery suitable for short-form social media. Use a natural conversational speaking pace. Do not rush the delivery to fit a time limit. Keep pauses natural and expressive. Sound clear, punchy, engaging, and human. Maintain the same narrator identity and vocal character across scenes. Do not add, remove, paraphrase, or repeat words. Read exactly the supplied text.",
+          "planned_scene_duration_sec": 6.0,
+          "file_size_bytes": 372044,
+          "qc": {
+            "status": "passed",
+            "checked_at": "2026-09-19T12:48:33.628122+00:00",
+            "expected": {
+              "planned_scene_duration_sec": 6.0,
+              "min_duration_sec": 0.2,
+              "min_file_size_bytes": 5000,
+              "min_sample_rate": 22050,
+              "timing_policy": "Voice duration does not fail QC for exceeding planned scene duration. Video timing adapts to natural voice."
+            },
+            "actual": {
+              "has_audio_stream": true,
+              "codec": "pcm_s16le",
+              "codec_long_name": "PCM signed 16-bit little-endian",
+              "sample_rate": 24000,
+              "channels": 1,
+              "channel_layout": null,
+              "sample_fmt": "s16",
+              "duration_sec": 7.75,
+              "bit_rate": 384000,
+              "file_size_bytes": 372044
+            },
+            "errors": [],
+            "warnings": [
+              "Natural voice is 1.750s longer than the originally planned scene. Scene timing must adapt."
+            ]
+          }
+        },
+        "timing": {
+          "status": "passed",
+          "planned_duration_sec": 6.0,
+          "voice_duration_sec": 7.75,
+          "headroom_sec": 0.3,
+          "raw_render_duration_sec": 8.05,
+          "render_duration_sec": 8.05,
+          "min_video_duration_sec": 2.0,
+          "max_video_duration_sec": 10.0,
+          "script_revision_required": false,
+          "errors": [],
+          "warnings": [
+            "Render duration differs from the original scene plan by +2.050s."
+          ]
+        }
+      }
+    ]
+  },
+  "visuals": {
+    "generation_mode": "ai_video",
+    "provider": null,
+    "global_prompt": "Colorful surreal corporate comedy. Highly expressive characters, cinematic lighting, exaggerated comedic timing, clean composition, vertical social media video.",
+    "negative_prompt": "blurry, distorted faces, extra limbs, duplicate characters, unreadable text, watermark, logo, deformed hands, inconsistent character appearance",
+    "scenes": [
+      {
+        "scene_id": 1,
+        "image_prompt": "Vertical 9:16 cinematic close-up in a bright, colorful surreal corporate office. Mike, the tired 35-year-old office worker with short brown hair, glasses, blue shirt, and dark trousers, fills the foreground, holding a formal termination letter in visibly trembling hands and staring at it with exaggerated horror and disbelief. Behind him, Mr. Whiskers, a fluffy orange tabby cat in a tiny black business suit and red tie, sits confidently on the desk like a powerful executive. Use a readable layered composition: letter and shaking hands in the lower foreground, Mike's stunned face centered, suited cat clearly visible behind him. Bright corporate lighting, saturated office colors, cinematic depth of field, clean comedic shapes, stylized non-realistic proportions. No legible text on the letter.",
+        "motion_prompt": "Slow push-in from the letter toward Mike’s horrified face, with a subtle tremble in his hands and one blink. Finish with a gentle rack focus toward Mr. Whiskers holding a steady, authoritative stare.",
+        "negative_prompt": "Photorealism, blurry faces, unreadable or nonsensical text, extra characters, duplicate cat, inconsistent clothing, missing glasses, missing red tie, extra limbs, deformed hands, distorted letter, logos, captions, subtitles, watermark, dark muddy lighting, chaotic camera movement.",
+        "characters": [
+          "char-001",
+          "char-002"
+        ],
+        "continuity_notes": "Keep Mike’s short brown hair, glasses, blue shirt, and dark trousers unchanged. Keep Mr. Whiskers fluffy orange tabby with black suit and red tie. Establish the cat as the dominant executive presence and maintain the bright surreal corporate palette.",
+        "image": {
+          "status": "generated",
+          "file": "output/20260918-000001/images/scene_001.png",
+          "model": "gpt-image-2.5-flare",
+          "quality": "low",
+          "size": "1008x1792",
+          "reference_images": [
+            "output/20260918-000001/characters/char-001/reference.png",
+            "output/20260918-000001/characters/char-002/reference.png"
+          ],
+          "qc": {
+            "status": "passed",
+            "checked_at": "2026-09-19T10:10:25.798447+00:00",
+            "expected": {
+              "format": "PNG",
+              "size": "1008x1792",
+              "aspect_ratio": "9:16",
+              "min_file_size_bytes": 20000
+            },
+            "actual": {
+              "file_size_bytes": 2623219,
+              "width": 1008,
+              "height": 1792,
+              "aspect_ratio": 0.5625,
+              "format": "PNG",
+              "mode": "RGB",
+              "frames": 1,
+              "luminance_mean": 122.671,
+              "luminance_stddev": 65.417,
+              "alpha_mean": null,
+              "alpha_min": null,
+              "alpha_max": null
+            },
+            "errors": [],
+            "warnings": []
+          },
+          "semantic_qc": {
+            "status": "passed",
+            "checked_at": "2026-09-19T10:10:33.129076+00:00",
+            "model": "gpt-5.6-luna",
+            "detail": "high",
+            "scene_matches_prompt": true,
+            "composition_ok": true,
+            "anatomy_ok": true,
+            "unwanted_text_or_logo": false,
+            "extra_main_characters": false,
+            "characters": [
+              {
+                "character_id": "char-001",
+                "present": true,
+                "identity_match": true,
+                "appearance_match": true,
+                "clothing_match": true,
+                "confidence": 0.99,
+                "notes": "Mike is clearly recognizable with matching short brown hair, large glasses, blue shirt, and dark trousers. His horrified expression and trembling hands holding the blank letter fit the intended scene."
+              },
+              {
+                "character_id": "char-002",
+                "present": true,
+                "identity_match": true,
+                "appearance_match": true,
+                "clothing_match": true,
+                "confidence": 0.99,
+                "notes": "Mr. Whiskers is clearly recognizable as a fluffy orange tabby with matching facial features, black business suit, white shirt, and red tie. He is prominently positioned as the confident executive."
+              }
+            ],
+            "overall_notes": "Strong match to the intended bright surreal corporate-office scene. The layered vertical composition is clear: blank letter and hands in the foreground, Mike's stunned face centered, and the suited cat clearly visible behind him. No unwanted readable text, logos, or obvious visual defects are present.",
+            "errors": [],
+            "warnings": []
+          }
+        },
+        "video": {
+          "status": "generated",
+          "file": "output/20260918-000001/videos/scene_001.mp4",
+          "provider": "runway",
+          "model": "gen4_turbo",
+          "ratio": "720:1280",
+          "duration_sec": 3,
+          "source_image": "output/20260918-000001/images/scene_001.png",
+          "task_id": "1da107cb-c42b-4fe7-bd8d-f9a8ae94b836",
+          "file_size_bytes": 1260666,
+          "qc": {
+            "status": "passed",
+            "checked_at": "2026-09-19T10:11:29.014242+00:00",
+            "expected": {
+              "duration_sec": 3.0,
+              "ratio": "720:1280",
+              "codec": "h264",
+              "min_file_size_bytes": 50000
+            },
+            "actual": {
+              "file_size_bytes": 1260666,
+              "video_stream_count": 1,
+              "audio_stream_count": 0,
+              "codec": "h264",
+              "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "pixel_format": "yuv420p",
+              "width": 720,
+              "height": 1280,
+              "aspect_ratio": 0.5625,
+              "fps": 24.0,
+              "duration_sec": 3.042,
+              "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+              "bit_rate": "3315723"
+            },
+            "errors": [],
+            "warnings": []
+          },
+          "semantic_qc": {
+            "status": "passed",
+            "checked_at": "2026-09-19T10:11:37.820527+00:00",
+            "model": "gpt-5.6-luna",
+            "detail": "high",
+            "frame_count": 5,
+            "samples": [
+              {
+                "index": 1,
+                "timestamp_sec": 0.0
+              },
+              {
+                "index": 2,
+                "timestamp_sec": 0.735
+              },
+              {
+                "index": 3,
+                "timestamp_sec": 1.471
+              },
+              {
+                "index": 4,
+                "timestamp_sec": 2.206
+              },
+              {
+                "index": 5,
+                "timestamp_sec": 2.942
+              }
+            ],
+            "motion_matches_prompt": true,
+            "temporal_progression_coherent": true,
+            "source_frame_continuity_ok": true,
+            "anatomy_ok": true,
+            "morphing_or_shape_drift": false,
+            "unexpected_scene_cut": false,
+            "unwanted_text_or_logo": false,
+            "extra_main_characters": false,
+            "characters": [
+              {
+                "character_id": "char-001",
+                "present_throughout": true,
+                "identity_stable": true,
+                "appearance_stable": true,
+                "clothing_stable": true,
+                "confidence": 0.98,
+                "notes": "Mike remains recognizable throughout with stable short brown hair, glasses, blue shirt, and dark trousers. He progressively shifts toward the left edge as the shot pushes toward Mr. Whiskers; only part of him remains visible in the final frame."
+              },
+              {
+                "character_id": "char-002",
+                "present_throughout": true,
+                "identity_stable": true,
+                "appearance_stable": true,
+                "clothing_stable": true,
+                "confidence": 0.99,
+                "notes": "Mr. Whiskers remains a fluffy orange tabby in a black suit and red tie, with a stable authoritative expression and centered prominence by the final frames."
+              }
+            ],
+            "problematic_sample_indices": [],
+            "overall_notes": "The sampled sequence forms one continuous push-in/rack-focus shot. The composition progresses from Mike and the letter in the foreground toward Mr. Whiskers as the dominant executive presence. No visible cuts, major anatomy defects, identity drift, unintended extras, or readable text are present.",
+            "errors": [],
+            "warnings": []
+          }
+        }
+      },
+      {
+        "scene_id": 2,
+        "image_prompt": "Vertical 9:16 cinematic frame in a colorful surreal corporate comedy style. A bright open-plan office has been transformed into an exaggerated CEO boardroom, with saturated corporate blue, teal, yellow, and red accents, clean stylized shapes, and bright cinematic office lighting. In the foreground, Mike, a tired 35-year-old office worker with short brown hair, glasses, blue shirt, and dark trousers, stands frozen in the open doorway, visibly confused and nervous, facing into the room. Centered deeper in the composition, Mr. Whiskers, a fluffy orange tabby cat in a tiny black business suit and red tie, sits authoritatively behind an oversized polished executive desk in a grand leather CEO chair, paws resting on the desk. A few indistinct office-worker silhouettes sit calmly around a conference table, all oriented toward the cat as if this bizarre leadership arrangement is completely normal. Strong vertical composition with Mike in the lower foreground and the oversized chair creating a comedic reveal above him; expressive faces, readable silhouettes, polished desk reflections, cinematic depth, no visible text or signage.",
+        "motion_prompt": "One continuous locked-off shot preserving the full vertical composition. Mr. Whiskers makes one slow, authoritative tap of a paw on the desk, then holds still. Mike remains frozen and visibly confused in the doorway. Office workers stay calm with only subtle breathing and blinking; both principal characters remain clearly visible throughout.",
+        "negative_prompt": "Photorealism, dark muddy lighting, blurry image, unreadable faces, distorted anatomy, extra limbs or paws, duplicate Mike, duplicate cat, missing glasses, incorrect clothing, missing black suit or red tie, inconsistent orange tabby markings, cat with a human face, warped desk, unstable chair, chaotic crowd motion, characters leaving frame, visible subtitles, captions, logos, watermarks, UI elements, illegible signage",
+        "characters": [
+          "char-001",
+          "char-002"
+        ],
+        "continuity_notes": "Maintain Mike's short brown hair, glasses, blue shirt, and dark trousers, and Mr. Whiskers' fluffy orange tabby fur, tiny black suit, and red tie. Preserve the bright surreal corporate palette and the visual contrast between Mike's nervous confusion and the cat's ruthless executive authority. Keep both principal characters clearly visible throughout.",
+        "image": {
+          "status": "generated",
+          "file": "output/20260918-000001/images/scene_002.png",
+          "model": "gpt-image-2.5-flare",
+          "quality": "low",
+          "size": "1008x1792",
+          "reference_images": [
+            "output/20260918-000001/characters/char-001/reference.png",
+            "output/20260918-000001/characters/char-002/reference.png"
+          ],
+          "qc": {
+            "status": "passed",
+            "checked_at": "2026-09-18T17:02:36.483385+00:00",
+            "expected": {
+              "format": "PNG",
+              "size": "1008x1792",
+              "aspect_ratio": "9:16",
+              "min_file_size_bytes": 20000
+            },
+            "actual": {
+              "file_size_bytes": 2550652,
+              "width": 1008,
+              "height": 1792,
+              "aspect_ratio": 0.5625,
+              "format": "PNG",
+              "mode": "RGB",
+              "frames": 1,
+              "luminance_mean": 106.417,
+              "luminance_stddev": 61.831,
+              "alpha_mean": null,
+              "alpha_min": null,
+              "alpha_max": null
+            },
+            "errors": [],
+            "warnings": []
+          },
+          "semantic_qc": {
+            "status": "passed",
+            "checked_at": "2026-09-18T17:02:54.610922+00:00",
+            "model": "gpt-5.6-luna",
+            "detail": "high",
+            "scene_matches_prompt": true,
+            "composition_ok": true,
+            "anatomy_ok": true,
+            "unwanted_text_or_logo": false,
+            "extra_main_characters": false,
+            "characters": [
+              {
+                "character_id": "char-001",
+                "present": true,
+                "identity_match": true,
+                "appearance_match": true,
+                "clothing_match": true,
+                "confidence": 0.96,
+                "notes": "Mike is clearly present in the foreground with matching short brown hair, glasses, blue shirt, and dark trousers. He is shown from behind/side, so his confused facial expression is not directly visible, but his doorway stance and orientation fit the scene."
+              },
+              {
+                "character_id": "char-002",
+                "present": true,
+                "identity_match": true,
+                "appearance_match": true,
+                "clothing_match": true,
+                "confidence": 0.99,
+                "notes": "Mr. Whiskers is prominently centered behind the desk, with matching fluffy orange tabby fur, facial features, black business suit, and red tie."
+              }
+            ],
+            "overall_notes": "Strong match to the intended vertical cinematic boardroom reveal. Both principal characters are clearly readable, the office environment and saturated corporate palette are appropriate, and the background workers remain indistinct and contextually acceptable. No visible text, logos, or major visual defects.",
+            "errors": [],
+            "warnings": []
+          }
+        },
+        "video": {
+          "status": "generated",
+          "file": "output/20260918-000001/videos/scene_002.mp4",
+          "provider": "runway",
+          "model": "gen4_turbo",
+          "ratio": "720:1280",
+          "duration_sec": 7,
+          "source_image": "output/20260918-000001/images/scene_002.png",
+          "task_id": "cb4517ac-7310-4346-a1cf-fd9755a0ec87",
+          "file_size_bytes": 2409703,
+          "qc": {
+            "status": "passed",
+            "checked_at": "2026-09-19T10:01:16.793540+00:00",
+            "expected": {
+              "duration_sec": 7.0,
+              "ratio": "720:1280",
+              "codec": "h264",
+              "min_file_size_bytes": 50000
+            },
+            "actual": {
+              "file_size_bytes": 2409703,
+              "video_stream_count": 1,
+              "audio_stream_count": 0,
+              "codec": "h264",
+              "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "pixel_format": "yuv420p",
+              "width": 720,
+              "height": 1280,
+              "aspect_ratio": 0.5625,
+              "fps": 24.0,
+              "duration_sec": 7.083,
+              "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+              "bit_rate": "2721547"
+            },
+            "errors": [],
+            "warnings": []
+          },
+          "semantic_qc": {
+            "status": "passed",
+            "checked_at": "2026-09-19T10:01:51.284458+00:00",
+            "model": "gpt-5.6-luna",
+            "detail": "high",
+            "frame_count": 5,
+            "samples": [
+              {
+                "index": 1,
+                "timestamp_sec": 0.0
+              },
+              {
+                "index": 2,
+                "timestamp_sec": 1.746
+              },
+              {
+                "index": 3,
+                "timestamp_sec": 3.492
+              },
+              {
+                "index": 4,
+                "timestamp_sec": 5.237
+              },
+              {
+                "index": 5,
+                "timestamp_sec": 6.983
+              }
+            ],
+            "motion_matches_prompt": true,
+            "temporal_progression_coherent": true,
+            "source_frame_continuity_ok": true,
+            "anatomy_ok": true,
+            "morphing_or_shape_drift": false,
+            "unexpected_scene_cut": false,
+            "unwanted_text_or_logo": false,
+            "extra_main_characters": false,
+            "characters": [
+              {
+                "character_id": "char-001",
+                "present_throughout": true,
+                "identity_stable": true,
+                "appearance_stable": true,
+                "clothing_stable": true,
+                "confidence": 0.98,
+                "notes": "Mike remains consistently visible in the left foreground with short brown hair, glasses, blue shirt, and dark trousers."
+              },
+              {
+                "character_id": "char-002",
+                "present_throughout": true,
+                "identity_stable": true,
+                "appearance_stable": true,
+                "clothing_stable": true,
+                "confidence": 0.99,
+                "notes": "Mr. Whiskers remains centered behind the desk with stable fluffy orange tabby fur, black suit, and red tie; paw positioning shows only subtle motion consistent with the requested tap and hold."
+              }
+            ],
+            "problematic_sample_indices": [],
+            "overall_notes": "All sampled frames form one continuous locked-off shot with preserved vertical composition and strong continuity from the approved source image. Both principal characters remain clearly visible, the office environment stays stable, and no obvious anatomy artifacts, morphing, unintended text, logos, or extra prominent characters are present.",
+            "errors": [],
+            "warnings": []
+          }
+        }
+      },
+      {
+        "scene_id": 3,
+        "image_prompt": "Vertical 9:16 low-angle surreal corporate comedy scene inside the bright boardroom. Mr. Whiskers dominates the frame from behind the desk, narrowed eyes and a ruthless executive expression, fluffy orange tabby fur, tiny black business suit, and red tie clearly visible. One paw rests near a stack of colorful performance charts, while a coffee cup is captured at the instant it tips over the desk edge toward the floor. Mike stands opposite in his blue shirt and dark trousers, glasses slightly emphasized by the light, staring in horrified disbelief. Simplified office workers in the background applaud solemnly. Use strong cinematic lighting, bright corporate colors, polished desk reflections, exaggerated but clean expressions, and a readable low-angle composition. Include a small blank gold nameplate without legible writing.",
+        "motion_prompt": "The coffee cup slowly tips and falls out of frame while Mr. Whiskers gives one small dismissive paw gesture. Mike’s eyes track the cup and he makes a slight recoil; the camera performs a restrained low-angle push-in.",
+        "negative_prompt": "Photorealism, spilled liquid obscuring faces, broken cup shards, extra paws, duplicate characters, inconsistent fur or clothing, distorted hands, legible generated text, logos, captions, subtitles, watermark, frantic cuts, excessive motion, muddy shadows, exaggerated destruction.",
+        "characters": [
+          "char-001",
+          "char-002"
+        ],
+        "continuity_notes": "Maintain the same boardroom, desk orientation, and character wardrobe from scene 2. Mr. Whiskers must remain visually dominant and composed; Mike remains opposite the desk, visibly intimidated."
+      },
+      {
+        "scene_id": 4,
+        "image_prompt": "Vertical 9:16 cinematic surreal boardroom presentation. Mr. Whiskers stands beside a glowing presentation screen displaying only abstract colorful charts and a clearly declining graphic with no readable words. He wears the same tiny black business suit and red tie and gestures with cold executive efficiency. Mike stands beside the conference table pleading with clasped hands, exhausted face and nervous posture clearly readable, wearing his consistent blue shirt, glasses, and dark trousers. A miniature plain envelope rests halfway across the polished desk toward Mike, positioned as the visual focal point. Simplified background employees form a neat row with synchronized approving nods. Bright corporate lighting, saturated colors, clean composition, subtle dramatic reflections, non-realistic comedic proportions.",
+        "motion_prompt": "Use a slow lateral camera slide past the still, synchronized background figures toward the desk. The envelope glides a short distance and stops in front of Mike; Mike makes one small pleading hand movement while Mr. Whiskers remains composed.",
+        "negative_prompt": "Photorealism, readable screen text, logos, brand interfaces, extra featured characters, duplicate cat or Mike, inconsistent wardrobe, missing glasses, malformed envelope, extra limbs, distorted hands, rapid choreography, characters leaving frame, captions, subtitles, watermark, dim or muddy lighting.",
+        "characters": [
+          "char-001",
+          "char-002"
+        ],
+        "continuity_notes": "Keep the boardroom layout and bright corporate palette consistent. The abstract screen must communicate a failing presentation without generated text. Preserve Mike’s desperate posture and Mr. Whiskers’s cold, controlled authority."
+      },
+      {
+        "scene_id": 5,
+        "image_prompt": "Vertical 9:16 cinematic exit shot in the colorful corporate office. Mike walks toward the elevator in the foreground carrying a cardboard box containing a mug and small desk plant, shoulders slumped and expression defeated, with short brown hair, glasses, blue shirt, and dark trousers unchanged. Through a glass office wall behind him, Mr. Whiskers reclines smugly in the oversized CEO chair beside a luxurious cat bed, fluffy orange tabby fur and tiny black suit with red tie clearly visible. Mike holds a glowing smartphone angled toward camera with a generic notification symbol and no legible text. The cat raises one paw in a smug wave. Bright cinematic office lighting, saturated corporate colors, clear vertical layering, surreal comedic contrast between Mike’s defeat and the cat’s comfort.",
+        "motion_prompt": "Follow Mike with a gentle forward camera move as the phone gives one subtle buzz and glow. Whip-pan is replaced by a controlled short pan toward the glass office; Mr. Whiskers gives one small smug wave and settles back into the chair.",
+        "negative_prompt": "Photorealism, readable phone text, brand logos, social media interface, extra characters, duplicate cat or Mike, inconsistent clothing, missing glasses, distorted phone or box, falling objects, extra limbs, rapid camera whip, disappearing subjects, captions, subtitles, watermark, dark lighting, cluttered office.",
+        "characters": [
+          "char-001",
+          "char-002"
+        ],
+        "continuity_notes": "Preserve all established character details and the executive office setting. Mike remains the defeated departing employee; Mr. Whiskers remains comfortably victorious behind the glass. The phone notification should stay generic so text can be added later."
+      }
+    ]
+  },
+  "audio": {
+    "voiceover": {
+      "required": true,
+      "provider": null,
+      "voice_id": null,
+      "language": "en",
+      "style": "energetic storyteller",
+      "speed": 1.08,
+      "audio_file": null
+    },
+    "background_music": {
+      "required": true,
+      "provider": null,
+      "style": "quirky cinematic comedy",
+      "volume": 0.2,
+      "audio_file": null
+    },
+    "sound_effects": {
+      "enabled": true,
+      "effects": [
+        {
+          "scene_id": 3,
+          "effect": "dramatic button press"
+        },
+        {
+          "scene_id": 5,
+          "effect": "office door slam"
+        },
+        {
+          "scene_id": 6,
+          "effect": "notification sound"
+        }
+      ]
+    }
+  },
+  "subtitles": {
+    "enabled": true,
+    "language": "en",
+    "burned_in": true,
+    "max_lines": 2,
+    "max_chars_per_line": 32,
+    "style": {
+      "font": "Arial Bold",
+      "position": "lower_center",
+      "animation": "word_highlight"
+    },
+    "subtitle_file": null
+  },
+  "metadata": {
+    "title": "My Cat Just Fired Me 😭",
+    "description": "Apparently my cat is the CEO now. I should have seen the warning signs.",
+    "hashtags": [
+      "#funny",
+      "#cat",
+      "#ai",
+      "#comedy",
+      "#shorts",
+      "#office"
+    ],
+    "thumbnail": {
+      "required": true,
+      "text": "MY CAT FIRED ME",
+      "image_file": null
+    }
+  },
+  "output": {
+    "directory": "output/20260918-000001/",
+    "video_file": null,
+    "video_format": "mp4",
+    "video_codec": "h264",
+    "audio_codec": "aac",
+    "resolution": "1080x1920",
+    "fps": 30
+  },
+  "publishing": {
+    "youtube_shorts": {
+      "enabled": true,
+      "status": "pending",
+      "platform_id": null
+    },
+    "tiktok": {
+      "enabled": true,
+      "status": "pending",
+      "platform_id": null
+    },
+    "instagram_reels": {
+      "enabled": true,
+      "status": "pending",
+      "platform_id": null
+    },
+    "facebook_reels": {
+      "enabled": true,
+      "status": "pending",
+      "platform_id": null
+    }
+  },
+  "analytics": {
+    "status": "not_published",
+    "views": null,
+    "likes": null,
+    "comments": null,
+    "shares": null,
+    "average_watch_time_sec": null,
+    "completion_rate": null,
+    "engagement_rate": null
+  },
+  "errors": [],
+  "pipeline_status": {
+    "script": {
+      "state": "completed",
+      "total": 5,
+      "ready": 5,
+      "failed": 0,
+      "pending": 0
+    },
+    "visual_prompts": {
+      "state": "completed",
+      "total": 5,
+      "ready": 5,
+      "failed": 0,
+      "pending": 0
+    },
+    "character_reference_prompts": {
+      "state": "completed",
+      "total": 2,
+      "ready": 2,
+      "failed": 0,
+      "pending": 0
+    },
+    "character_references": {
+      "state": "completed",
+      "total": 2,
+      "ready": 2,
+      "failed": 0,
+      "pending": 0
+    },
+    "scene_images": {
+      "state": "partial",
+      "total": 5,
+      "ready": 2,
+      "failed": 0,
+      "pending": 3
+    },
+    "image_qc": {
+      "state": "partial",
+      "total": 5,
+      "ready": 2,
+      "failed": 0,
+      "pending": 3
+    },
+    "image_semantic_qc": {
+      "state": "partial",
+      "total": 5,
+      "ready": 2,
+      "failed": 0,
+      "pending": 3
+    },
+    "scene_videos": {
+      "state": "partial",
+      "total": 5,
+      "ready": 2,
+      "failed": 0,
+      "pending": 3
+    },
+    "video_qc": {
+      "state": "partial",
+      "total": 5,
+      "ready": 2,
+      "failed": 0,
+      "pending": 3
+    },
+    "video_semantic_qc": {
+      "state": "partial",
+      "total": 5,
+      "ready": 2,
+      "failed": 0,
+      "pending": 3
+    },
+    "voiceovers": {
+      "state": "completed",
+      "total": 5,
+      "ready": 5,
+      "failed": 0,
+      "pending": 0
+    },
+    "voice_qc": {
+      "state": "completed",
+      "total": 5,
+      "ready": 5,
+      "failed": 0,
+      "pending": 0
+    },
+    "scene_timing": {
+      "state": "completed",
+      "total": 5,
+      "ready": 5,
+      "failed": 0,
+      "pending": 0
+    }
+  },
+  "orchestration": {
+    "scenes": {
+      "2": {
+        "image_attempts": 1,
+        "video_attempts": 1,
+        "last_action": "complete",
+        "state": "completed",
+        "created_at": "2026-09-19T10:25:30.437883+00:00",
+        "updated_at": "2026-09-19T10:25:30.441471+00:00",
+        "history": [
+          {
+            "timestamp": "2026-09-19T10:25:30.437896+00:00",
+            "action": "state_migration",
+            "result": "initialized",
+            "image_attempts": 1,
+            "video_attempts": 1,
+            "details": {
+              "inferred_from_existing_artifacts": true
+            }
+          },
+          {
+            "timestamp": "2026-09-19T10:25:30.441473+00:00",
+            "action": "complete",
+            "result": "passed",
+            "image_attempts": 1,
+            "video_attempts": 1
+          }
+        ]
+      }
+    },
+    "voice_scenes": {
+      "1": {
+        "attempts": 0,
+        "last_speed": 1.08,
+        "state": "completed",
+        "last_action": "complete",
+        "policy": "natural_voice_timing_v1"
+      },
+      "2": {
+        "attempts": 1,
+        "last_speed": 1.211,
+        "state": "completed",
+        "last_action": "complete",
+        "policy": "natural_voice_timing_v1"
+      },
+      "3": {
+        "attempts": 1,
+        "last_speed": 1.189,
+        "state": "completed",
+        "last_action": "complete",
+        "policy": "natural_voice_timing_v1"
+      },
+      "4": {
+        "attempts": 1,
+        "last_speed": 1.707,
+        "state": "completed",
+        "last_action": "complete",
+        "policy": "natural_voice_timing_v1"
+      },
+      "5": {
+        "attempts": 1,
+        "last_speed": 2.14,
+        "state": "completed",
+        "last_action": "complete",
+        "policy": "natural_voice_timing_v1"
+      }
+    }
+  },
+  "timing_summary": {
+    "status": "complete",
+    "scene_count": 5,
+    "completed_scenes": 5,
+    "failed_scenes": 0,
+    "target_duration_sec": 30.0,
+    "target_tolerance_sec": 4.0,
+    "minimum_total_duration_sec": 20.0,
+    "maximum_total_duration_sec": 45.0,
+    "total_render_duration_sec": 35.4,
+    "difference_from_target_sec": 5.4,
+    "within_spec_bounds": true,
+    "script_revision_recommended": true,
+    "revision_scene_ids": []
+  }
+}
