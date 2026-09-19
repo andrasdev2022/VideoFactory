@@ -536,10 +536,12 @@ def generate_fallback(
     scene[
         "motion_prompt"
     ] = (
-        "Very slow deterministic camera push-in on the approved "
-        "source image. All characters, props, clothing, anatomy, "
-        "background, and composition remain otherwise unchanged. "
-        "No character duplication, no independent subject motion, "
+        "Deterministic static hold on the approved source image. "
+        "No independent character or object motion is required. "
+        "An imperceptible or extremely subtle camera push-in is "
+        "acceptable but not required to be visually detectable. "
+        "All characters, props, clothing, anatomy, background, "
+        "and composition remain stable. No character duplication, "
         "no scene change, and no morphing."
     )
 
@@ -551,7 +553,10 @@ def generate_fallback(
         "semantic_qc_policy"
     ] = {
         "version":
-            "still_image_fallback_v1",
+            "still_image_fallback_v2",
+
+        "motion_mode":
+            "static_hold",
 
         "allowed_exit_character_ids":
             [],
