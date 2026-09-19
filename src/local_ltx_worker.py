@@ -254,7 +254,7 @@ def main() -> int:
 
         (
             torch,
-            DiffusionPipeline,
+            LTXImageToVideoPipeline,
             export_to_video,
             load_image,
         ) = import_runtime()
