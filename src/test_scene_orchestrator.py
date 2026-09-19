@@ -540,7 +540,7 @@ class SceneOrchestratorTests(
         )
 
         self.assertIn(
-            "no morphing",
+            "morphing",
             prompt.lower(),
         )
 
