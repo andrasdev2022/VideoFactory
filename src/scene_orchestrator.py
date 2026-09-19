@@ -380,6 +380,16 @@ def inspect_scene_state(
             scene.get(
                 "motion_strategy"
             ),
+
+        "semantic_motion_mode":
+            scene
+            .get(
+                "semantic_qc_policy",
+                {},
+            )
+            .get(
+                "motion_mode"
+            ),
     }
 
 
@@ -1245,6 +1255,19 @@ def choose_next_action(
         == "still_image_fallback_v1"
     ):
 
+        if (
+            state.get(
+                "semantic_motion_mode"
+            )
+            == "static_hold"
+            and state.get(
+                "video_semantic_qc_policy_version"
+            )
+            == VIDEO_SEMANTIC_QC_POLICY_VERSION
+        ):
+
+            return ACTION_STOP_VIDEO
+
         return ACTION_UPGRADE_LOCAL_FALLBACK_POLICY
 
     # A failed semantic result from an older QC policy must be
@@ -1318,6 +1341,19 @@ def choose_next_action(
             )
             == "still_image_fallback_v1"
         ):
+
+            if (
+                state.get(
+                    "semantic_motion_mode"
+                )
+                == "static_hold"
+                and state.get(
+                    "video_semantic_qc_policy_version"
+                )
+                == VIDEO_SEMANTIC_QC_POLICY_VERSION
+            ):
+
+                return ACTION_STOP_VIDEO
 
             return ACTION_UPGRADE_LOCAL_FALLBACK_POLICY
 
