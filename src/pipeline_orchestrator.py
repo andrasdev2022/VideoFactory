@@ -562,6 +562,10 @@ def preflight() -> None:
                 "RUNWAYML_API_SECRET"
             )
 
+    elif video_provider == "still_motion":
+        from still_motion_provider import load_config
+        load_config()
+
     elif video_provider == "local_ltx":
 
         local_ltx_python = Path(
@@ -629,7 +633,7 @@ def preflight() -> None:
             (
                 "Unsupported VIDEO_PROVIDER: "
                 f"{video_provider}. "
-                "Expected 'local_ltx' or 'runway'."
+                "Expected 'local_ltx', 'still_motion' or 'runway'."
             )
         )
 
