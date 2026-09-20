@@ -68,11 +68,11 @@ def is_permission_scope_error(
     return any(
         marker in text
         for marker in (
-            '"code":"missing_permissions"',
-            '"code":"insufficient_permissions"',
-            '"code": "missing_permissions"',
-            '"code": "insufficient_permissions"',
+            "missing_permissions",
+            "insufficient_permissions",
+            "missing permission",
             "missing the permission",
+            "insufficient permission",
             "insufficient permissions",
         )
     )
