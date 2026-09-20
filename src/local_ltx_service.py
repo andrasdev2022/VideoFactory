@@ -12,6 +12,7 @@ from pathlib import Path
 
 from local_ltx_worker import (
     DEFAULT_NEGATIVE_PROMPT,
+    fit_prompt_to_token_budget,
     import_runtime,
     print_cuda_info,
 )
@@ -219,6 +220,39 @@ def generate(
         request["seed"]
     )
 
+    (
+        prompt_text,
+        original_prompt_tokens,
+        used_prompt_tokens,
+    ) = fit_prompt_to_token_budget(
+        str(
+            request["prompt"]
+        ),
+        pipeline.tokenizer,
+    )
+
+    print(
+        (
+            "Prompt tokens: "
+            f"{original_prompt_tokens} -> "
+            f"{used_prompt_tokens}"
+        ),
+        flush=True,
+    )
+
+    if (
+        original_prompt_tokens
+        > used_prompt_tokens
+    ):
+
+        print(
+            (
+                "Prompt compacted before Diffusers "
+                "to preserve the LTX 128-token limit."
+            ),
+            flush=True,
+        )
+
     generator = (
         torch.Generator(
             device="cpu"
@@ -234,9 +268,7 @@ def generate(
 
     result = pipeline(
         image=image,
-        prompt=str(
-            request["prompt"]
-        ),
+        prompt=prompt_text,
         negative_prompt=str(
             request.get(
                 "negative_prompt",

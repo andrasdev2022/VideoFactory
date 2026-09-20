@@ -382,6 +382,24 @@ def build_video_prompt(
         )
 
     # -----------------------------------------------------
+    # Local LTX has a 128-token text-encoder limit.
+    #
+    # Put continuity immediately after the requested motion so
+    # identity/clothing constraints survive any final provider-side
+    # token-budget compaction. Runway keeps the historical order.
+    # -----------------------------------------------------
+
+    if (
+        VIDEO_PROVIDER
+        == "local_ltx"
+        and continuity_notes
+    ):
+
+        parts.append(
+            f"Continuity: {continuity_notes}"
+        )
+
+    # -----------------------------------------------------
     # Previous QC correction
     # -----------------------------------------------------
 
@@ -390,6 +408,10 @@ def build_video_prompt(
         correction = build_qc_correction(
             job,
             scene,
+            include_observation=(
+                VIDEO_PROVIDER
+                != "local_ltx"
+            ),
         )
 
         if correction:
@@ -403,7 +425,11 @@ def build_video_prompt(
     # Continuity
     # -----------------------------------------------------
 
-    if continuity_notes:
+    if (
+        VIDEO_PROVIDER
+        != "local_ltx"
+        and continuity_notes
+    ):
 
         parts.append(
             f"Continuity: {continuity_notes}"
@@ -1345,6 +1371,7 @@ def compact_qc_observation(
 def build_qc_correction(
     job: dict,
     scene: dict,
+    include_observation: bool = True,
 ) -> str:
 
     qc = (
@@ -1468,20 +1495,22 @@ def build_qc_correction(
                 f"Keep {character_name}'s clothing unchanged."
             )
 
-    observation = compact_qc_observation(
-        qc.get(
-            "overall_notes"
-        )
-    )
+    if include_observation:
 
-    if observation:
-
-        corrections.append(
-            (
-                "Previous QC observation: "
-                + observation
+        observation = compact_qc_observation(
+            qc.get(
+                "overall_notes"
             )
         )
+
+        if observation:
+
+            corrections.append(
+                (
+                    "Previous QC observation: "
+                    + observation
+                )
+            )
 
     if not corrections:
         return ""
