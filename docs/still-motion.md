@@ -65,3 +65,30 @@ python -m unittest discover -s src -p "test_*.py" -v 2>&1 |
 The renderer integration test uses synthetic images and real FFmpeg/ffprobe
 when installed. It calls no AI APIs. A complete live E2E still needs to run
 on the configured Windows machine.
+
+## Narration shorter than the target
+
+Still-motion jobs with approved voice QC can reach the configured target duration
+using visual holds after narration. The existing audio, text, and speaking speed
+are preserved; the assembler pads the voice track with silence while background
+music continues. Extra time is distributed equally across scenes, redistributing
+any excess when a scene reaches its configured maximum duration.
+
+This recovery also runs for an existing job whose global rewrite attempts are
+exhausted. It does not reset that counter or call text/TTS services. Resume the
+master pipeline without `--idea`. Other providers retain their existing rewrite
+policy. Long narration, incomplete/stale timing, pending voice remeasurement,
+insufficient scene capacity, and jobs with generated scene videos are not padded.
+Final duration can differ by frame rounding.
+
+PowerShell resume, with consistent UTF-8 logging (main `.venv`, repository root):
+
+```powershell
+$env:VIDEO_PROVIDER = 'still_motion'
+New-Item -ItemType Directory -Force .\logs | Out-Null
+$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$log = ".\logs\still-motion-resume-$stamp.log"
+python -u .\src\pipeline_orchestrator.py 2>&1 | Out-File $log -Encoding utf8
+$pipelineExit = $LASTEXITCODE
+"Exit code: $pipelineExit" | Out-File $log -Encoding utf8 -Append
+```

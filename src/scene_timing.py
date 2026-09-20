@@ -726,6 +726,9 @@ def main() -> int:
                 f"  [ERROR] {error}"
             )
 
+    from still_motion_timing import extend_visual_holds
+    extend_visual_holds(job, spec)
+
     job[
         "timing_summary"
     ] = (

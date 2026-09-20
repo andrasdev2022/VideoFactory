@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from validator import load_json
+from validator import load_json, load_yaml
+from still_motion_timing import extend_visual_holds
 
 
 PROJECT_ROOT = (
@@ -606,6 +607,9 @@ def main() -> int:
             job = load_json(
                 JOB_FILE
             )
+
+            if extend_visual_holds(job, load_yaml(PROJECT_ROOT / "config" / "video_spec_v1.yaml")):
+                save_job_atomic(job)
 
             state = inspect_global_state(
                 job
