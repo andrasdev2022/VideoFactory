@@ -13,6 +13,57 @@ DEFAULT_NEGATIVE_PROMPT = (
     "distorted, morphing, duplicate characters, extra limbs"
 )
 
+DEFAULT_PROMPT_TOKEN_BUDGET = 120
+
+
+def fit_prompt_to_token_budget(
+    prompt: str,
+    tokenizer,
+    max_tokens: int = DEFAULT_PROMPT_TOKEN_BUDGET,
+) -> tuple[str, int, int]:
+
+    if max_tokens < 1:
+        raise ValueError(
+            "max_tokens must be positive."
+        )
+
+    normalized = " ".join(
+        str(
+            prompt
+        )
+        .split()
+    )
+
+    token_ids = tokenizer.encode(
+        normalized,
+        add_special_tokens=False,
+    )
+
+    original_count = len(
+        token_ids
+    )
+
+    if original_count <= max_tokens:
+
+        return (
+            normalized,
+            original_count,
+            original_count,
+        )
+
+    fitted = tokenizer.decode(
+        token_ids[
+            :max_tokens
+        ],
+        skip_special_tokens=True,
+    ).strip()
+
+    return (
+        fitted,
+        original_count,
+        max_tokens,
+    )
+
 
 def parse_args() -> argparse.Namespace:
 
@@ -374,6 +425,35 @@ def main() -> int:
             )
         )
 
+        (
+            prompt_text,
+            original_prompt_tokens,
+            used_prompt_tokens,
+        ) = fit_prompt_to_token_budget(
+            args.prompt,
+            pipeline.tokenizer,
+        )
+
+        print(
+            (
+                "Prompt tokens: "
+                f"{original_prompt_tokens} -> "
+                f"{used_prompt_tokens}"
+            )
+        )
+
+        if (
+            original_prompt_tokens
+            > used_prompt_tokens
+        ):
+
+            print(
+                (
+                    "Prompt compacted before Diffusers "
+                    "to preserve the LTX 128-token limit."
+                )
+            )
+
         generator = (
             torch.Generator(
                 device="cpu"
@@ -389,7 +469,7 @@ def main() -> int:
 
         result = pipeline(
             image=image,
-            prompt=args.prompt,
+            prompt=prompt_text,
             negative_prompt=
                 args.negative_prompt,
             width=args.width,
