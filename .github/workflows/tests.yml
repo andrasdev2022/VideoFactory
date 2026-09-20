@@ -27,6 +27,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Check PowerShell scripts
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "./setup-local-ltx.ps1"),
+            [ref]$null,
+            [ref]$errors
+          ) | Out-Null
+
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object {
+              Write-Error $_.Message
+            }
+            exit 1
+          }
+
       - name: Run unit tests
         run: |
           python -m unittest discover -s src -p "test_*.py" -v

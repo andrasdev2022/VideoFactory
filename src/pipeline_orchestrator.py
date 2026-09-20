@@ -4,8 +4,10 @@ import argparse
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
+import time
 
 from datetime import datetime, timezone
 from pathlib import Path
@@ -526,7 +528,6 @@ def preflight() -> None:
 
     for name in (
         "OPENAI_API_KEY",
-        "RUNWAYML_API_SECRET",
         "ELEVENLABS_API_KEY",
     ):
         if not os.getenv(
@@ -535,6 +536,92 @@ def preflight() -> None:
             missing.append(
                 name
             )
+
+    video_provider = os.getenv(
+        "VIDEO_PROVIDER",
+        "local_ltx",
+    ).strip().lower()
+
+    if video_provider == "runway":
+
+        if not os.getenv(
+            "RUNWAYML_API_SECRET"
+        ):
+
+            missing.append(
+                "RUNWAYML_API_SECRET"
+            )
+
+    elif video_provider == "local_ltx":
+
+        local_ltx_python = Path(
+            os.getenv(
+                "LOCAL_LTX_PYTHON",
+                str(
+                    PROJECT_ROOT
+                    / ".venv-ltx"
+                    / "Scripts"
+                    / "python.exe"
+                ),
+            )
+        )
+
+        local_ltx_worker = Path(
+            os.getenv(
+                "LOCAL_LTX_WORKER",
+                str(
+                    SRC_DIR
+                    / "local_ltx_worker.py"
+                ),
+            )
+        )
+
+        local_ltx_service = Path(
+            os.getenv(
+                "LOCAL_LTX_SERVICE",
+                str(
+                    SRC_DIR
+                    / "local_ltx_service.py"
+                ),
+            )
+        )
+
+        if not local_ltx_python.exists():
+
+            missing.append(
+                (
+                    "Local LTX environment "
+                    f"({local_ltx_python})"
+                )
+            )
+
+        if not local_ltx_worker.exists():
+
+            missing.append(
+                (
+                    "Local LTX worker "
+                    f"({local_ltx_worker})"
+                )
+            )
+
+        if not local_ltx_service.exists():
+
+            missing.append(
+                (
+                    "Local LTX service "
+                    f"({local_ltx_service})"
+                )
+            )
+
+    else:
+
+        raise PipelineError(
+            (
+                "Unsupported VIDEO_PROVIDER: "
+                f"{video_provider}. "
+                "Expected 'local_ltx' or 'runway'."
+            )
+        )
 
     for command in (
         "ffmpeg",
@@ -762,6 +849,367 @@ def run_voice_timing(
         )
 
 
+def reserve_local_port() -> int:
+
+    with socket.socket(
+        socket.AF_INET,
+        socket.SOCK_STREAM,
+    ) as listener:
+
+        listener.bind(
+            (
+                "127.0.0.1",
+                0,
+            )
+        )
+
+        return int(
+            listener
+            .getsockname()[
+                1
+            ]
+        )
+
+
+def ping_local_ltx_service(
+    host: str,
+    port: int,
+    timeout_sec: float = 1.0,
+) -> bool:
+
+    request = (
+        json.dumps(
+            {
+                "action":
+                    "ping",
+            }
+        )
+        + "\n"
+    ).encode(
+        "utf-8"
+    )
+
+    try:
+
+        with socket.create_connection(
+            (
+                host,
+                port,
+            ),
+            timeout=timeout_sec,
+        ) as connection:
+
+            connection.settimeout(
+                timeout_sec
+            )
+
+            connection.sendall(
+                request
+            )
+
+            line = (
+                connection
+                .makefile(
+                    "rb"
+                )
+                .readline()
+            )
+
+    except OSError:
+
+        return False
+
+    if not line:
+
+        return False
+
+    try:
+
+        response = json.loads(
+            line.decode(
+                "utf-8"
+            )
+        )
+
+    except Exception:
+
+        return False
+
+    return bool(
+        response.get(
+            "ok"
+        )
+        and response.get(
+            "status"
+        )
+        == "ready"
+    )
+
+
+def start_local_ltx_service():
+
+    if os.getenv(
+        "VIDEO_PROVIDER",
+        "local_ltx",
+    ).strip().lower() != "local_ltx":
+
+        return None
+
+    python_exe = Path(
+        os.getenv(
+            "LOCAL_LTX_PYTHON",
+            str(
+                PROJECT_ROOT
+                / ".venv-ltx"
+                / "Scripts"
+                / "python.exe"
+            ),
+        )
+    )
+
+    service_file = Path(
+        os.getenv(
+            "LOCAL_LTX_SERVICE",
+            str(
+                SRC_DIR
+                / "local_ltx_service.py"
+            ),
+        )
+    )
+
+    model_id = os.getenv(
+        "LOCAL_LTX_MODEL_ID",
+        "Lightricks/LTX-Video",
+    )
+
+    offload_mode = os.getenv(
+        "LOCAL_LTX_OFFLOAD_MODE",
+        "sequential",
+    )
+
+    host = "127.0.0.1"
+    port = reserve_local_port()
+
+    command = [
+        str(
+            python_exe
+        ),
+        str(
+            service_file
+        ),
+        "--host",
+        host,
+        "--port",
+        str(
+            port
+        ),
+        "--model-id",
+        model_id,
+        "--offload",
+        offload_mode,
+    ]
+
+    environment = os.environ.copy()
+
+    environment[
+        "PYTHONUNBUFFERED"
+    ] = "1"
+
+    environment[
+        "PYTHONUTF8"
+    ] = "1"
+
+    environment[
+        "PYTHONIOENCODING"
+    ] = "utf-8"
+
+    print(
+        "\n" + "=" * 60
+    )
+
+    print(
+        "STARTING PERSISTENT LOCAL LTX SERVICE"
+    )
+
+    print(
+        "=" * 60
+    )
+
+    print(
+        subprocess.list2cmdline(
+            command
+        )
+    )
+
+    process = subprocess.Popen(
+        command,
+        cwd=PROJECT_ROOT,
+        env=environment,
+    )
+
+    start_timeout = float(
+        os.getenv(
+            "LOCAL_LTX_SERVER_START_TIMEOUT_SEC",
+            "300",
+        )
+    )
+
+    deadline = (
+        time.monotonic()
+        + start_timeout
+    )
+
+    while time.monotonic() < deadline:
+
+        return_code = process.poll()
+
+        if return_code is not None:
+
+            raise PipelineError(
+                (
+                    "Persistent Local LTX service exited during "
+                    f"startup with return code {return_code}."
+                )
+            )
+
+        if ping_local_ltx_service(
+            host,
+            port,
+        ):
+
+            os.environ[
+                "LOCAL_LTX_SERVER_HOST"
+            ] = host
+
+            os.environ[
+                "LOCAL_LTX_SERVER_PORT"
+            ] = str(
+                port
+            )
+
+            print(
+                (
+                    "Persistent Local LTX service ready at "
+                    f"{host}:{port}"
+                )
+            )
+
+            return process
+
+        time.sleep(
+            0.5
+        )
+
+    process.terminate()
+
+    raise PipelineError(
+        (
+            "Persistent Local LTX service did not become ready "
+            f"within {start_timeout:.0f}s."
+        )
+    )
+
+
+def stop_local_ltx_service(
+    process,
+) -> None:
+
+    if process is None:
+
+        return
+
+    host = os.getenv(
+        "LOCAL_LTX_SERVER_HOST",
+        "127.0.0.1",
+    )
+
+    raw_port = os.getenv(
+        "LOCAL_LTX_SERVER_PORT"
+    )
+
+    if (
+        raw_port
+        and process.poll()
+        is None
+    ):
+
+        request = (
+            json.dumps(
+                {
+                    "action":
+                        "shutdown",
+                }
+            )
+            + "\n"
+        ).encode(
+            "utf-8"
+        )
+
+        try:
+
+            with socket.create_connection(
+                (
+                    host,
+                    int(
+                        raw_port
+                    ),
+                ),
+                timeout=2.0,
+            ) as connection:
+
+                connection.sendall(
+                    request
+                )
+
+                connection.settimeout(
+                    2.0
+                )
+
+                connection.recv(
+                    4096
+                )
+
+        except OSError:
+
+            pass
+
+    try:
+
+        process.wait(
+            timeout=15
+        )
+
+    except subprocess.TimeoutExpired:
+
+        process.terminate()
+
+        try:
+
+            process.wait(
+                timeout=5
+            )
+
+        except subprocess.TimeoutExpired:
+
+            process.kill()
+
+            process.wait()
+
+    os.environ.pop(
+        "LOCAL_LTX_SERVER_HOST",
+        None,
+    )
+
+    os.environ.pop(
+        "LOCAL_LTX_SERVER_PORT",
+        None,
+    )
+
+    print(
+        "Persistent Local LTX service stopped."
+    )
+
+
 def run_scene_generation(
     max_image_attempts: int,
     max_video_attempts: int,
@@ -773,32 +1221,50 @@ def run_scene_generation(
         )
         return
 
-    for scene_id in get_scene_ids():
+    ltx_service = None
 
-        run_worker(
-            STAGE_SCENES,
-            "scene_orchestrator.py",
-            [
-                "--scene",
-                str(
-                    scene_id
-                ),
+    try:
 
-                "--max-image-attempts",
-                str(
-                    max_image_attempts
-                ),
-
-                "--max-video-attempts",
-                str(
-                    max_video_attempts
-                ),
-            ],
+        ltx_service = (
+            start_local_ltx_service()
         )
 
-    if not all_scene_generation_completed():
-        raise PipelineError(
-            "One or more scene-generation stages remain incomplete."
+        for scene_id in get_scene_ids():
+
+            run_worker(
+                STAGE_SCENES,
+                "scene_orchestrator.py",
+                [
+                    "--scene",
+                    str(
+                        scene_id
+                    ),
+
+                    "--max-image-attempts",
+                    str(
+                        max_image_attempts
+                    ),
+
+                    "--max-video-attempts",
+                    str(
+                        max_video_attempts
+                    ),
+                ],
+            )
+
+        if not all_scene_generation_completed():
+
+            raise PipelineError(
+                (
+                    "One or more scene-generation stages "
+                    "remain incomplete."
+                )
+            )
+
+    finally:
+
+        stop_local_ltx_service(
+            ltx_service
         )
 
 
