@@ -172,6 +172,30 @@ $env:LOCAL_LTX_OFFLOAD_MODE = "sequential"
 
 
 # ------------------------------------------------------------
+# SERVICE CREDIT / QUOTA PREFLIGHT
+# ------------------------------------------------------------
+
+$env:SERVICE_PREFLIGHT_ENABLED = "1"
+$env:SERVICE_PREFLIGHT_TIMEOUT_SEC = "10"
+
+# Current ElevenLabs planning rates used only for preflight estimation.
+# Override these when provider pricing changes.
+$env:ELEVENLABS_MUSIC_CREDITS_PER_MINUTE = "900"
+$env:ELEVENLABS_SFX_CREDITS_PER_SECOND = "40"
+
+# Keep this at 0 when Pay As You Go may be available. When set to 1,
+# insufficient visible ElevenLabs quota becomes a hard BLOCK.
+$env:ELEVENLABS_PREFLIGHT_ASSUME_NO_PAYG = "0"
+
+# Optional OpenAI organization budget guard:
+# $env:OPENAI_ADMIN_KEY = "..."
+# $env:OPENAI_PREFLIGHT_MONTHLY_BUDGET_USD = "25"
+
+# Optional Runway model-rate override:
+# $env:RUNWAY_PREFLIGHT_CREDITS_PER_SECOND = "5"
+
+
+# ------------------------------------------------------------
 # RUNWAY VIDEO (explicit opt-in provider)
 # ------------------------------------------------------------
 
@@ -381,6 +405,10 @@ Write-Host ""
 
 Write-Host "  Video provider:"
 Write-Host "    $env:VIDEO_PROVIDER"
+
+Write-Host ""
+Write-Host "  Service preflight:"
+Write-Host "    enabled = $env:SERVICE_PREFLIGHT_ENABLED"
 
 if ($env:VIDEO_PROVIDER -eq "local_ltx") {
     Write-Host "    model = $env:LOCAL_LTX_MODEL_ID"
