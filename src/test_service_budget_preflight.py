@@ -1,0 +1,317 @@
+import os
+import unittest
+
+from unittest.mock import patch
+
+from service_budget_preflight import (
+    BLOCK,
+    PASS,
+    WARN,
+    blocking,
+    estimate_elevenlabs_audio_credits,
+    estimate_runway_budget,
+    evaluate_runway_capacity,
+)
+
+
+class ServiceBudgetPreflightTests(
+    unittest.TestCase
+):
+
+    def runway_job(
+        self,
+    ) -> dict:
+
+        return {
+            "script": {
+                "scenes": [
+                    {
+                        "scene_id": 1,
+                        "timing": {
+                            "status": "passed",
+                            "render_duration_sec": 2.2,
+                        },
+                    },
+                    {
+                        "scene_id": 2,
+                        "timing": {
+                            "status": "passed",
+                            "render_duration_sec": 4.1,
+                        },
+                    },
+                ],
+            },
+            "visuals": {
+                "scenes": [
+                    {
+                        "scene_id": 1,
+                        "video": {},
+                    },
+                    {
+                        "scene_id": 2,
+                        "video": {},
+                    },
+                ],
+            },
+        }
+
+
+    def test_runway_budget_uses_pending_scene_duration_and_retries(
+        self,
+    ):
+
+        budget = estimate_runway_budget(
+            job=self.runway_job(),
+            model="gen4_turbo",
+            max_video_attempts=4,
+        )
+
+        self.assertEqual(
+            budget[
+                "provider_durations_sec"
+            ],
+            [
+                3.0,
+                5.0,
+            ],
+        )
+
+        self.assertEqual(
+            budget[
+                "base_required_credits"
+            ],
+            40.0,
+        )
+
+        self.assertEqual(
+            budget[
+                "worst_case_required_credits"
+            ],
+            160.0,
+        )
+
+        self.assertEqual(
+            budget[
+                "base_required_generations"
+            ],
+            2,
+        )
+
+        self.assertEqual(
+            budget[
+                "worst_case_required_generations"
+            ],
+            8,
+        )
+
+
+    def test_runway_ready_scene_is_not_budgeted_again(
+        self,
+    ):
+
+        job = self.runway_job()
+
+        job[
+            "visuals"
+        ][
+            "scenes"
+        ][0][
+            "video"
+        ] = {
+            "provider": "runway",
+            "status": "passed",
+            "semantic_qc": {
+                "status": "passed",
+            },
+        }
+
+        budget = estimate_runway_budget(
+            job=job,
+            model="gen4_turbo",
+            max_video_attempts=4,
+        )
+
+        self.assertEqual(
+            budget[
+                "provider_durations_sec"
+            ],
+            [
+                5.0,
+            ],
+        )
+
+        self.assertEqual(
+            budget[
+                "base_required_credits"
+            ],
+            25.0,
+        )
+
+
+    def test_runway_capacity_blocks_warns_and_passes(
+        self,
+    ):
+
+        budget = estimate_runway_budget(
+            job=self.runway_job(),
+            model="gen4_turbo",
+            max_video_attempts=4,
+        )
+
+        status, _ = evaluate_runway_capacity(
+            balance=20.0,
+            budget=budget,
+            remaining_daily=100,
+        )
+
+        self.assertEqual(
+            status,
+            BLOCK,
+        )
+
+        status, _ = evaluate_runway_capacity(
+            balance=50.0,
+            budget=budget,
+            remaining_daily=100,
+        )
+
+        self.assertEqual(
+            status,
+            WARN,
+        )
+
+        status, _ = evaluate_runway_capacity(
+            balance=200.0,
+            budget=budget,
+            remaining_daily=8,
+        )
+
+        self.assertEqual(
+            status,
+            PASS,
+        )
+
+
+    def test_elevenlabs_audio_estimate_uses_music_and_sfx_durations(
+        self,
+    ):
+
+        job = {
+            "script": {
+                "scenes": [
+                    {
+                        "timing": {
+                            "render_duration_sec": 12.0,
+                        },
+                    },
+                    {
+                        "timing": {
+                            "render_duration_sec": 18.0,
+                        },
+                    },
+                ],
+            },
+            "audio": {
+                "background_music": {
+                    "required": True,
+                },
+                "sound_effects": {
+                    "enabled": True,
+                    "effects": [
+                        {
+                            "duration_sec": 1.5,
+                        },
+                        {
+                            "duration_sec": 2.0,
+                        },
+                    ],
+                },
+            },
+        }
+
+        with patch.dict(
+            os.environ,
+            {
+                "ELEVENLABS_MUSIC_CREDITS_PER_MINUTE":
+                    "900",
+                "ELEVENLABS_SFX_CREDITS_PER_SECOND":
+                    "40",
+            },
+        ):
+
+            estimate = (
+                estimate_elevenlabs_audio_credits(
+                    job
+                )
+            )
+
+        self.assertEqual(
+            estimate[
+                "estimated_music_credits"
+            ],
+            450.0,
+        )
+
+        self.assertEqual(
+            estimate[
+                "estimated_sfx_credits"
+            ],
+            140.0,
+        )
+
+        self.assertEqual(
+            estimate[
+                "estimated_total_credits"
+            ],
+            590.0,
+        )
+
+
+    def test_blocking_returns_only_hard_blocks(
+        self,
+    ):
+
+        from service_budget_preflight import (
+            ServiceCheck,
+        )
+
+        checks = [
+            ServiceCheck(
+                "a",
+                PASS,
+                "ok",
+                {},
+            ),
+            ServiceCheck(
+                "b",
+                WARN,
+                "warning",
+                {},
+            ),
+            ServiceCheck(
+                "c",
+                BLOCK,
+                "stop",
+                {},
+            ),
+        ]
+
+        self.assertEqual(
+            [
+                check.service
+                for check
+                in blocking(
+                    checks
+                )
+            ],
+            [
+                "c",
+            ],
+        )
+
+
+if __name__ == "__main__":
+
+    unittest.main(
+        verbosity=2
+    )
