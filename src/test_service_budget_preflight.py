@@ -1,11 +1,15 @@
+import io
+import json
 import os
 import unittest
+import urllib.error
 
 from unittest.mock import patch
 
 from service_budget_preflight import (
     BLOCK,
     PASS,
+    UNKNOWN,
     WARN,
     blocking,
     check_elevenlabs,
@@ -317,35 +321,107 @@ class ServiceBudgetPreflightTests(
         self,
     ):
 
-        error = RuntimeError(
-            (
-                "HTTP 401 from "
-                "https://api.elevenlabs.io/v1/user/subscription: "
-                '{"detail":{"code":"unauthorized",'
-                '"message":"invalid API key"}}'
-            )
+        error = urllib.error.HTTPError(
+            "https://api.elevenlabs.io/v1/user/subscription",
+            401,
+            "Unauthorized",
+            {},
+            io.BytesIO(
+                b'{"detail":{"code":"unauthorized",'
+                b'"message":"invalid API key"}}'
+            ),
         )
 
         with (
-            patch.dict(
-                os.environ,
-                {
-                    "ELEVENLABS_API_KEY":
-                        "bad-key",
-                },
-            ),
-            patch(
-                "service_budget_preflight.http_json",
-                side_effect=error,
-            ),
+            patch.dict(os.environ, {"ELEVENLABS_API_KEY": "bad-key"}),
+            patch("urllib.request.urlopen", side_effect=error),
         ):
-
             check = check_elevenlabs()
 
-        self.assertEqual(
-            check.status,
-            BLOCK,
-        )
+        self.assertEqual(check.status, BLOCK)
+
+
+    def test_elevenlabs_http_error_policy_at_startup_and_audio_stage(self):
+        url = "https://api.elevenlabs.io/v1/user/subscription"
+        cases = [
+            (401, "missing_permissions", WARN),
+            (403, "missing_permissions", WARN),
+            (401, "insufficient_permissions", WARN),
+            (403, "insufficient_permissions", WARN),
+            (401, "invalid_api_key", BLOCK),
+            (403, "invalid_api_key", BLOCK),
+            (401, "unauthorized", BLOCK),
+            (403, "unauthorized", BLOCK),
+            (403, "forbidden", UNKNOWN),
+            (429, "rate_limit_exceeded", UNKNOWN),
+            (503, "internal_server_error", UNKNOWN),
+        ]
+        for http_status, code, expected in cases:
+            for field in ("code", "status"):
+                for required in (None, 521.25):
+                    with self.subTest(
+                        http_status=http_status, code=code,
+                        field=field, required=required,
+                    ):
+                        body = json.dumps({"detail": {field: code}}).encode()
+                        error = urllib.error.HTTPError(
+                            url, http_status, "error", {}, io.BytesIO(body)
+                        )
+                        with (
+                            patch.dict(os.environ, {"ELEVENLABS_API_KEY": "test-key"}),
+                            patch("urllib.request.urlopen", side_effect=error) as request,
+                        ):
+                            check = check_elevenlabs(required_credits=required)
+                        self.assertEqual(check.status, expected)
+                        self.assertEqual(bool(blocking([check])), expected == BLOCK)
+                        self.assertEqual(check.details["required_credits_estimate"], required)
+                        request.assert_called_once()
+                        self.assertEqual(request.call_args.args[0].full_url, url)
+
+
+    def test_elevenlabs_unavailable_quota_is_unknown(self):
+        for error in (
+            TimeoutError("timed out"),
+            urllib.error.URLError("connection failed"),
+            ValueError("invalid JSON"),
+        ):
+            with (
+                self.subTest(error=error),
+                patch.dict(os.environ, {"ELEVENLABS_API_KEY": "test-key"}),
+                patch("urllib.request.urlopen", side_effect=error),
+            ):
+                check = check_elevenlabs(required_credits=521.25)
+                self.assertEqual(check.status, UNKNOWN)
+                self.assertEqual(check.details["authentication"], "unknown")
+                self.assertFalse(blocking([check]))
+
+
+    def test_elevenlabs_success_reads_subscription_only(self):
+        with (
+            patch.dict(os.environ, {"ELEVENLABS_API_KEY": "test-key"}),
+            patch("urllib.request.urlopen") as request,
+        ):
+            request.return_value.__enter__.return_value.read.return_value = (
+                b'{"character_count":100,"character_limit":1000}'
+            )
+            check = check_elevenlabs(required_credits=521.25)
+        self.assertEqual(check.status, PASS)
+        self.assertEqual(check.details["visible_available_credits"], 900)
+        request.assert_called_once()
+        req = request.call_args.args[0]
+        self.assertEqual(req.full_url, "https://api.elevenlabs.io/v1/user/subscription")
+        self.assertEqual(req.get_method(), "GET")
+        self.assertEqual(req.get_header("Xi-api-key"), "test-key")
+
+
+    def test_elevenlabs_missing_api_key_blocks_without_request(self):
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("urllib.request.urlopen") as request,
+        ):
+            check = check_elevenlabs()
+        self.assertEqual(check.status, BLOCK)
+        request.assert_not_called()
 
 
     def test_elevenlabs_audio_estimate_uses_music_and_sfx_durations(

@@ -62,7 +62,7 @@ def is_permission_scope_error(
     exc: Exception,
 ) -> bool:
     text = str(
-        exc
+        exc.body if isinstance(exc, ProviderHTTPError) else exc
     ).lower()
 
     return any(
@@ -76,6 +76,40 @@ def is_permission_scope_error(
             "insufficient permissions",
         )
     )
+
+
+class ProviderHTTPError(RuntimeError):
+    def __init__(self, status_code: int, url: str, body: str):
+        super().__init__(f"HTTP {status_code} from {url}: {body[:500]}")
+        self.status_code = status_code
+        self.body = body
+
+
+def is_authentication_error(
+    exc: Exception,
+) -> bool:
+    # http_json preserves the HTTP status and body. Do not infer invalid
+    # credentials from a timeout, a server error, or an unclassified 403.
+    if not isinstance(exc, ProviderHTTPError):
+        return False
+
+    if exc.status_code == 401:
+        return True
+
+    if exc.status_code != 403:
+        return False
+
+    try:
+        payload = json.loads(exc.body)
+        detail = payload.get("detail", {})
+        if not isinstance(detail, dict):
+            return False
+        return any(
+            detail.get(field) in {"invalid_api_key", "unauthorized"}
+            for field in ("code", "status")
+        )
+    except (ValueError, AttributeError, TypeError):
+        return False
 
 
 def http_json(
@@ -106,9 +140,7 @@ def http_json(
         except Exception:
             pass
 
-        raise RuntimeError(
-            f"HTTP {exc.code} from {url}: {body[:500]}"
-        ) from exc
+        raise ProviderHTTPError(exc.code, url, body) from exc
 
     except urllib.error.URLError as exc:
         raise RuntimeError(
@@ -320,14 +352,18 @@ def check_elevenlabs(
                 },
             )
 
+        invalid_auth = is_authentication_error(exc)
         return ServiceCheck(
             "elevenlabs",
-            BLOCK,
+            BLOCK if invalid_auth else UNKNOWN,
             (
                 "ElevenLabs subscription/quota "
                 f"check failed: {exc}"
             ),
             {
+                "authentication":
+                    "failed" if invalid_auth else "unknown",
+
                 "quota_visibility":
                     "unavailable",
 

@@ -80,9 +80,16 @@ $env:ELEVENLABS_MUSIC_CREDITS_PER_MINUTE = "900"
 $env:ELEVENLABS_SFX_CREDITS_PER_SECOND = "40"
 ```
 
-If the API key is valid but its scope does not allow reading subscription
-information, VideoFactory reports `WARN` instead of incorrectly treating the
-account as out of credits.
+The preflight calls `/v1/user/subscription` directly; it never calls
+`/v1/models` and does not require `models_read` permission.
+
+`missing_permissions` and `insufficient_permissions` responses are `WARN`,
+including HTTP 401/403: quota visibility is unknown, not evidence of an
+invalid key. This applies at startup and before audio generation.
+
+Missing keys and authentication failures remain `BLOCK`. Timeouts, network
+failures, rate limits, server errors, and unclassified HTTP 403 responses are
+`UNKNOWN`, so an unavailable quota read alone does not stop the pipeline.
 
 Pay As You Go balance is not exposed by the subscription endpoint. Therefore,
 when visible quota is insufficient, the default is `WARN`, not `BLOCK`.
