@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 from validator import load_json
 from datetime import datetime, timezone
+from local_ltx_motion_policy import preserve_seed
 
 PROJECT_ROOT = (
     Path(__file__)
@@ -774,6 +775,7 @@ def apply_safe_motion_fallback(
             allowed_exit_ids,
     }
 
+    preserve_seed(scene)
     scene.pop(
         "video",
         None,
