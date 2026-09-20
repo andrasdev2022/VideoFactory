@@ -1,17 +1,22 @@
 from __future__ import annotations
 
+import argparse
 import json
 import math
 import os
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from runwayml import RunwayML
+
+from validator import load_json
 
 
 OPENAI_API_BASE = "https://api.openai.com"
@@ -1004,3 +1009,168 @@ def startup_checks(
         )
 
     return checks
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Check external VideoFactory provider "
+            "authentication, quota, and optional "
+            "active-job budgets without generating media."
+        )
+    )
+
+    parser.add_argument(
+        "--job-budget",
+        action="store_true",
+        help=(
+            "Also estimate provider capacity for "
+            "jobs/video_job.json."
+        ),
+    )
+
+    parser.add_argument(
+        "--max-video-attempts",
+        type=int,
+        default=4,
+    )
+
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+
+    if not enabled():
+        print(
+            "Service preflight is disabled."
+        )
+        return 0
+
+    provider = os.getenv(
+        "VIDEO_PROVIDER",
+        "local_ltx",
+    ).strip().lower()
+
+    runway_model = os.getenv(
+        "RUNWAY_VIDEO_MODEL",
+        "gen4_turbo",
+    )
+
+    checks = startup_checks(
+        video_provider=provider,
+        runway_model=runway_model,
+    )
+
+    print_checks(
+        "SERVICE ACCOUNT / QUOTA PREFLIGHT",
+        checks,
+    )
+
+    all_checks = list(
+        checks
+    )
+
+    if args.job_budget:
+        job_file = (
+            Path(__file__)
+            .resolve()
+            .parent
+            .parent
+            / "jobs"
+            / "video_job.json"
+        )
+
+        if not job_file.exists():
+            print(
+                "\nNo active jobs/video_job.json; "
+                "stage budget checks skipped."
+            )
+        else:
+            job = load_json(
+                job_file
+            )
+
+            if provider == "runway":
+                runway_budget = (
+                    estimate_runway_budget(
+                        job=job,
+                        model=runway_model,
+                        max_video_attempts=
+                            args.max_video_attempts,
+                    )
+                )
+
+                runway_check = check_runway(
+                    model=runway_model,
+                    budget=runway_budget,
+                )
+
+                print_checks(
+                    "RUNWAY SCENE BUDGET PREFLIGHT",
+                    [
+                        runway_check,
+                    ],
+                )
+
+                all_checks.append(
+                    runway_check
+                )
+
+            audio_estimate = (
+                estimate_elevenlabs_audio_credits(
+                    job
+                )
+            )
+
+            audio_check = check_elevenlabs(
+                required_credits=float(
+                    audio_estimate.get(
+                        "estimated_total_credits",
+                        0.0,
+                    )
+                )
+            )
+
+            audio_check = ServiceCheck(
+                service=audio_check.service,
+                status=audio_check.status,
+                message=audio_check.message,
+                details={
+                    **audio_check.details,
+                    **audio_estimate,
+                },
+            )
+
+            print_checks(
+                "ELEVENLABS AUDIO BUDGET PREFLIGHT",
+                [
+                    audio_check,
+                ],
+            )
+
+            all_checks.append(
+                audio_check
+            )
+
+    blockers = blocking(
+        all_checks
+    )
+
+    if blockers:
+        print(
+            "\nPREFLIGHT RESULT: BLOCK"
+        )
+        return 1
+
+    print(
+        "\nPREFLIGHT RESULT: CONTINUE"
+    )
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(
+        main()
+    )
