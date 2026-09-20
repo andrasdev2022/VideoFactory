@@ -8,6 +8,7 @@ from service_budget_preflight import (
     PASS,
     WARN,
     blocking,
+    check_elevenlabs,
     estimate_elevenlabs_audio_credits,
     estimate_runway_budget,
     evaluate_runway_capacity,
@@ -189,6 +190,104 @@ class ServiceBudgetPreflightTests(
         self.assertEqual(
             status,
             PASS,
+        )
+
+
+    def test_elevenlabs_missing_scope_warns_instead_of_blocking(
+        self,
+    ):
+
+        error = RuntimeError(
+            (
+                "HTTP 401 from "
+                "https://api.elevenlabs.io/v1/user/subscription: "
+                '{"detail":{"code":"missing_permissions",'
+                '"message":"missing permission user_read"}}'
+            )
+        )
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "ELEVENLABS_API_KEY":
+                        "test-key",
+                },
+            ),
+            patch(
+                "service_budget_preflight.http_json",
+                side_effect=error,
+            ) as mocked_http,
+        ):
+
+            check = check_elevenlabs(
+                required_credits=521.25,
+            )
+
+        self.assertEqual(
+            check.status,
+            WARN,
+        )
+
+        self.assertEqual(
+            check.details[
+                "quota_visibility"
+            ],
+            "permission_required",
+        )
+
+        self.assertEqual(
+            check.details[
+                "required_credits_estimate"
+            ],
+            521.25,
+        )
+
+        self.assertEqual(
+            mocked_http.call_count,
+            1,
+        )
+
+        self.assertIn(
+            "/v1/user/subscription",
+            mocked_http.call_args.kwargs[
+                "url"
+            ],
+        )
+
+
+    def test_elevenlabs_invalid_auth_still_blocks(
+        self,
+    ):
+
+        error = RuntimeError(
+            (
+                "HTTP 401 from "
+                "https://api.elevenlabs.io/v1/user/subscription: "
+                '{"detail":{"code":"unauthorized",'
+                '"message":"invalid API key"}}'
+            )
+        )
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "ELEVENLABS_API_KEY":
+                        "bad-key",
+                },
+            ),
+            patch(
+                "service_budget_preflight.http_json",
+                side_effect=error,
+            ),
+        ):
+
+            check = check_elevenlabs()
+
+        self.assertEqual(
+            check.status,
+            BLOCK,
         )
 
 
