@@ -44,6 +44,7 @@ STAGE_SUBTITLES = "subtitles"
 STAGE_AUDIO_PLAN = "audio_plan"
 STAGE_AUDIO_ASSETS = "audio_assets"
 STAGE_AUDIO_MIX = "audio_mix"
+STAGE_THUMBNAIL = "thumbnail"
 STAGE_FINAL_QC = "final_qc"
 
 STAGE_ORDER = (
@@ -59,6 +60,7 @@ STAGE_ORDER = (
     STAGE_AUDIO_PLAN,
     STAGE_AUDIO_ASSETS,
     STAGE_AUDIO_MIX,
+    STAGE_THUMBNAIL,
     STAGE_FINAL_QC,
 )
 
@@ -1710,7 +1712,12 @@ def run_pipeline(
     # Final QC + export
     # -----------------------------------------------------
 
-    run_standard_stage(
+    run_worker(STAGE_THUMBNAIL, "thumbnail_generator.py")
+    if should_stop_after(STAGE_THUMBNAIL, args.stop_after):
+        return
+
+    # Let final export validate its own file/signature cache on resume.
+    run_worker(
         STAGE_FINAL_QC,
         "final_qc_export.py",
     )

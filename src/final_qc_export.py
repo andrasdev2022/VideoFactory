@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from thumbnail_generator import thumbnail_ready, valid_image, thumbnail_signature
+
 import argparse
 import json
 import os
@@ -837,27 +839,7 @@ def validate_pipeline_integrity(
                 )
             )
 
-    thumbnail = (
-        job
-        .get(
-            "metadata",
-            {},
-        )
-        .get(
-            "thumbnail",
-            {},
-        )
-    )
-
-    if (
-        thumbnail.get(
-            "required",
-            False,
-        )
-        and not thumbnail.get(
-            "image_file"
-        )
-    ):
+    if not thumbnail_ready(job, PROJECT_ROOT):
 
         warnings.append(
             (
@@ -948,6 +930,8 @@ def build_source_signature(
                 ),
         },
 
+        "thumbnail": thumbnail_signature(job, PROJECT_ROOT),
+
         "script_voiceover":
             job
             .get(
@@ -1023,6 +1007,10 @@ def export_matches_current_request(
         ) != value:
 
             return False
+
+    cover = job.get("metadata", {}).get("thumbnail", {}).get("image_file")
+    if cover and (not valid_image(PROJECT_ROOT / cover) or not valid_image(paths["video"].parent / "thumbnail.jpg")):
+        return False
 
     return all(
         paths[
@@ -1217,11 +1205,27 @@ def export_final_package(
                 ]
             )
 
+    thumbnail_export = None
+    cover = job.get("metadata", {}).get("thumbnail", {}).get("image_file")
+    if cover and valid_image(PROJECT_ROOT / cover):
+        destination = paths["video"].parent / "thumbnail.jpg"
+        from PIL import Image, ImageOps
+        temporary = destination.with_suffix(".tmp.jpg")
+        try:
+            with Image.open(PROJECT_ROOT / cover) as image:
+                ImageOps.exif_transpose(image).convert("RGB").save(temporary, "JPEG", quality=94)
+            os.replace(temporary, destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+        thumbnail_export = relative_path(destination)
+
     export_metadata = build_export_metadata(
         job,
         actual,
         warnings,
     )
+
+    export_metadata["thumbnail_file"] = thumbnail_export
 
     write_json_atomic(
         paths[
@@ -1241,6 +1245,7 @@ def export_final_package(
     )
 
     return {
+        "thumbnail_file": thumbnail_export,
         "video_file":
             relative_path(
                 paths[
@@ -1390,20 +1395,7 @@ def run_final_qc_export(
         paths=paths,
     )
 
-    thumbnail_ready = bool(
-        job
-        .get(
-            "metadata",
-            {},
-        )
-        .get(
-            "thumbnail",
-            {},
-        )
-        .get(
-            "image_file"
-        )
-    )
+    cover_ready = thumbnail_ready(job, PROJECT_ROOT)
 
     static_hold_scene_ids = (
         get_static_hold_scene_ids(
@@ -1435,7 +1427,7 @@ def run_final_qc_export(
             technical_passed,
 
         "publish_ready":
-            thumbnail_ready,
+            cover_ready,
 
         "manual_visual_review_recommended":
             bool(
