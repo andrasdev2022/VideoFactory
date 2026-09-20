@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from visual_styles import effective_visual_spec, style_instruction
+
 from pathlib import Path
 import copy
 import json
@@ -252,7 +254,8 @@ def build_context(
             "fps": spec["video"]["fps"],
         },
 
-        "global_visual_spec": spec["visual"],
+        "global_visual_spec": effective_visual_spec(spec, job),
+        "visual_style_instruction": style_instruction(job),
 
         "job_style": job.get("style", {}),
 

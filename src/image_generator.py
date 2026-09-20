@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from visual_styles import style_instruction
+
 from pathlib import Path
 import argparse
 import base64
@@ -338,6 +340,7 @@ GLOBAL VISUAL STYLE:
 
 JOB STYLE:
 {style_text}
+{style_instruction(job)}
 
 CHARACTER REFERENCES:
 
@@ -429,6 +432,7 @@ REFERENCE DESCRIPTION:
 
 GLOBAL VISUAL STYLE:
 {style_text}
+{style_instruction(job)}
 
 REFERENCE IMAGE REQUIREMENTS:
 

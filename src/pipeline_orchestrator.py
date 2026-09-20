@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from visual_styles import CHOICES
+
 import argparse
 import json
 import os
@@ -137,7 +139,10 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
+    parser.add_argument("--visual-style", choices=CHOICES, default=None, help="Visual preset; requires --idea. Resume uses the saved job style.")
     args = parser.parse_args()
+    if args.visual_style is not None and args.idea is None:
+        parser.error("--visual-style requires --idea; resume preserves the saved job style.")
 
     for name in (
         "max_local_rewrites",
@@ -1487,6 +1492,9 @@ def run_pipeline(
             "--idea",
             args.idea,
         ]
+
+        if getattr(args, "visual_style", None) is not None:
+            new_job_args.extend(["--visual-style", args.visual_style])
 
         if args.job_id:
             new_job_args.extend(

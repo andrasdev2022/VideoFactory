@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from visual_styles import CHOICES, select_style, persist_style
+
 import argparse
 import json
 import os
@@ -76,6 +78,7 @@ Convert the user's rough seed into a production-ready story blueprint.
 
 Rules:
 - Preserve the user's core idea.
+- If visual_spec.style.preset is present, it overrides conflicting visual-medium or realism wording in the seed. Use it consistently for style and character appearance.
 - Write the production content in English.
 - Make it suitable for a roughly 30-second vertical short.
 - Keep the story simple enough for reliable image-to-video generation.
@@ -112,6 +115,7 @@ def parse_args() -> argparse.Namespace:
         help="Optional explicit job ID.",
     )
 
+    parser.add_argument("--visual-style", choices=CHOICES, default=None, help="Visual preset for this new job.")
     return parser.parse_args()
 
 
@@ -520,7 +524,7 @@ def build_job(
         in platforms.items()
     }
 
-    style = output.style.model_dump()
+    style = persist_style(output.style.model_dump(), spec)
 
     style[
         "consistency_required"
@@ -760,6 +764,9 @@ def main() -> int:
         spec = load_yaml(
             SPEC_FILE
         )
+
+        spec = select_style(spec, args.visual_style)
+        print(f"Visual style: {args.visual_style or 'default'}")
 
         client = OpenAI()
 
