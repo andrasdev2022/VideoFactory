@@ -175,6 +175,18 @@ artifact is therefore not reused as a Local LTX cache hit, and vice versa.
 
 Semantic QC retries stay local when `VIDEO_PROVIDER=local_ltx`.
 
+## Prompt token budget
+
+The current Diffusers LTX image-to-video pipeline uses a 128-token prompt
+limit. VideoFactory keeps a small safety margin and compacts Local LTX prompts
+to at most 120 tokenizer tokens before calling Diffusers.
+
+For Local LTX retries, the requested motion and continuity notes are placed
+before retry corrections. Verbose semantic-QC `overall_notes` are not copied
+back into the Local LTX prompt; only concrete correction directives are kept.
+This prevents Diffusers from silently truncating important character and
+continuity instructions.
+
 ## Retry seeds
 
 The first Local LTX generation uses a deterministic seed derived from the
