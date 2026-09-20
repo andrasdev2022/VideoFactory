@@ -14,6 +14,16 @@ from pathlib import Path
 from typing import Any
 
 from pipeline_status import refresh_pipeline_status
+from service_budget_preflight import (
+    blocking as blocking_service_checks,
+    check_elevenlabs,
+    check_runway,
+    enabled as service_preflight_enabled,
+    estimate_elevenlabs_audio_credits,
+    estimate_runway_budget,
+    print_checks as print_service_checks,
+    startup_checks as service_startup_checks,
+)
 from validator import load_json
 
 
@@ -641,6 +651,157 @@ def preflight() -> None:
                 + ", ".join(
                     missing
                 )
+            )
+        )
+
+
+    if service_preflight_enabled():
+
+        runway_model = os.getenv(
+            "RUNWAY_VIDEO_MODEL",
+            "gen4_turbo",
+        )
+
+        checks = service_startup_checks(
+            video_provider=video_provider,
+            runway_model=runway_model,
+        )
+
+        print_service_checks(
+            "SERVICE ACCOUNT / QUOTA PREFLIGHT",
+            checks,
+        )
+
+        blockers = blocking_service_checks(
+            checks
+        )
+
+        if blockers:
+
+            raise PipelineError(
+                (
+                    "Service preflight blocked: "
+                    + "; ".join(
+                        (
+                            f"{check.service}: "
+                            f"{check.message}"
+                        )
+                        for check in blockers
+                    )
+                )
+            )
+
+
+def run_runway_budget_preflight(
+    max_video_attempts: int,
+) -> None:
+
+    if not service_preflight_enabled():
+        return
+
+    video_provider = os.getenv(
+        "VIDEO_PROVIDER",
+        "local_ltx",
+    ).strip().lower()
+
+    if video_provider != "runway":
+        return
+
+    model = os.getenv(
+        "RUNWAY_VIDEO_MODEL",
+        "gen4_turbo",
+    )
+
+    budget = estimate_runway_budget(
+        job=load_job(),
+        model=model,
+        max_video_attempts=
+            max_video_attempts,
+    )
+
+    check = check_runway(
+        model=model,
+        budget=budget,
+    )
+
+    print_service_checks(
+        "RUNWAY SCENE BUDGET PREFLIGHT",
+        [
+            check,
+        ],
+    )
+
+    blockers = blocking_service_checks(
+        [
+            check,
+        ]
+    )
+
+    if blockers:
+
+        raise PipelineError(
+            (
+                "Runway scene-generation "
+                "budget preflight blocked: "
+                + check.message
+            )
+        )
+
+
+def run_elevenlabs_audio_budget_preflight() -> None:
+
+    if not service_preflight_enabled():
+        return
+
+    estimate = (
+        estimate_elevenlabs_audio_credits(
+            load_job()
+        )
+    )
+
+    required = float(
+        estimate.get(
+            "estimated_total_credits",
+            0.0,
+        )
+    )
+
+    check = check_elevenlabs(
+        required_credits=required,
+    )
+
+    merged_details = {
+        **check.details,
+        **estimate,
+    }
+
+    check = type(check)(
+        service=check.service,
+        status=check.status,
+        message=check.message,
+        details=merged_details,
+    )
+
+    print_service_checks(
+        "ELEVENLABS AUDIO BUDGET PREFLIGHT",
+        [
+            check,
+        ],
+    )
+
+    blockers = blocking_service_checks(
+        [
+            check,
+        ]
+    )
+
+    if blockers:
+
+        raise PipelineError(
+            (
+                "ElevenLabs audio budget "
+                "preflight blocked: "
+                + check.message
             )
         )
 
@@ -1449,6 +1610,10 @@ def run_pipeline(
     # Per-scene image/video + QC + trim
     # -----------------------------------------------------
 
+    run_runway_budget_preflight(
+        args.max_video_attempts
+    )
+
     run_scene_generation(
         max_image_attempts=
             args.max_image_attempts,
@@ -1512,6 +1677,8 @@ def run_pipeline(
         args.stop_after,
     ):
         return
+
+    run_elevenlabs_audio_budget_preflight()
 
     run_standard_stage(
         STAGE_AUDIO_ASSETS,
