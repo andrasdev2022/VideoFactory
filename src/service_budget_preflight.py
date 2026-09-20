@@ -58,6 +58,26 @@ def timeout_sec() -> float:
     )
 
 
+def is_permission_scope_error(
+    exc: Exception,
+) -> bool:
+    text = str(
+        exc
+    ).lower()
+
+    return any(
+        marker in text
+        for marker in (
+            '"code":"missing_permissions"',
+            '"code":"insufficient_permissions"',
+            '"code": "missing_permissions"',
+            '"code": "insufficient_permissions"',
+            "missing the permission",
+            "insufficient permissions",
+        )
+    )
+
+
 def http_json(
     *,
     url: str,
@@ -264,28 +284,6 @@ def check_elevenlabs(
         )
 
     try:
-        http_json(
-            url=(
-                f"{ELEVENLABS_API_BASE}"
-                "/v1/models"
-            ),
-            headers={
-                "xi-api-key": api_key,
-            },
-        )
-
-    except Exception as exc:
-        return ServiceCheck(
-            "elevenlabs",
-            BLOCK,
-            (
-                "ElevenLabs API authentication/"
-                f"availability check failed: {exc}"
-            ),
-            {},
-        )
-
-    try:
         subscription = http_json(
             url=(
                 f"{ELEVENLABS_API_BASE}"
@@ -297,19 +295,39 @@ def check_elevenlabs(
         )
 
     except Exception as exc:
+        if is_permission_scope_error(
+            exc
+        ):
+            return ServiceCheck(
+                "elevenlabs",
+                WARN,
+                (
+                    "ElevenLabs API key was recognized, "
+                    "but it lacks permission to read "
+                    "subscription/quota information. "
+                    "Credit sufficiency cannot be "
+                    f"verified: {exc}"
+                ),
+                {
+                    "authentication":
+                        "recognized",
+
+                    "quota_visibility":
+                        "permission_required",
+
+                    "required_credits_estimate":
+                        required_credits,
+                },
+            )
+
         return ServiceCheck(
             "elevenlabs",
-            WARN,
+            BLOCK,
             (
-                "ElevenLabs API key is valid, but "
-                "subscription/quota information is "
-                "not readable with this key scope: "
-                f"{exc}"
+                "ElevenLabs subscription/quota "
+                f"check failed: {exc}"
             ),
             {
-                "authentication":
-                    "ok",
-
                 "quota_visibility":
                     "unavailable",
 
