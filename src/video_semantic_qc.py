@@ -14,6 +14,7 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 from validator import load_json
 from pipeline_status import set_legacy_status_from_stage
+from local_ltx_motion_policy import qc_motion_prompt
 
 # ---------------------------------------------------------
 # PATHS
@@ -832,9 +833,7 @@ def build_context(
             scene["scene_id"],
 
         "motion_prompt":
-            scene.get(
-                "motion_prompt"
-            ),
+            qc_motion_prompt(scene),
 
         "continuity_notes":
             scene.get(

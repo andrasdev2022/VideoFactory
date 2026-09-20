@@ -124,7 +124,7 @@ class LocalLTXPromptBudgetTests(
         )
 
 
-    def test_local_ltx_retry_prioritizes_continuity_and_omits_observation(
+    def test_local_ltx_retry_replaces_failed_motion_and_omits_observation(
         self,
     ):
 
@@ -193,29 +193,17 @@ class LocalLTXPromptBudgetTests(
                 previous_provider
             )
 
-        self.assertIn(
-            "Keep Pip's teal robe and gold turban unchanged.",
-            prompt,
-        )
-
-        self.assertIn(
-            "Follow the requested motion exactly.",
-            prompt,
-        )
+        self.assertIn("Locked-off camera.", prompt)
+        self.assertIn("clothing, props and background remain stable", prompt)
+        self.assertNotIn("pushes the cart", prompt)
+        self.assertNotIn("Follow the requested motion exactly.", prompt)
 
         self.assertNotIn(
             "Previous QC observation:",
             prompt,
         )
 
-        self.assertLess(
-            prompt.index(
-                "Continuity:"
-            ),
-            prompt.index(
-                "Correction from previous attempt:"
-            ),
-        )
+        self.assertLess(len(prompt.split()), 80)
 
 
 if __name__ == "__main__":

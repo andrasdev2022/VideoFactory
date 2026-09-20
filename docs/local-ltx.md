@@ -181,18 +181,92 @@ The current Diffusers LTX image-to-video pipeline uses a 128-token prompt
 limit. VideoFactory keeps a small safety margin and compacts Local LTX prompts
 to at most 120 tokenizer tokens before calling Diffusers.
 
-For Local LTX retries, the requested motion and continuity notes are placed
-before retry corrections. Verbose semantic-QC `overall_notes` are not copied
-back into the Local LTX prompt; only concrete correction directives are kept.
-This prevents Diffusers from silently truncating important character and
-continuity instructions.
+Initial attempts retain the authored motion followed by continuity notes.
+Local LTX retry plans replace the failed action rather than append corrections.
+Verbose semantic-QC `overall_notes` and old action-bearing continuity notes
+are not copied back into retry prompts. The 120-token worker limit still
+applies to both one-shot and persistent-service generation.
+
+## Local LTX motion policy
+
+New visual prompts and `--motion-only` prompts receive Local LTX-specific
+instructions: locked camera, one small visible action by one subject, stable
+props, and no animated foreground steam/mist. The story's main gag should be
+readable in the source image. Existing authored prompts are not silently
+rewritten on their initial attempt.
+
+The existing orchestrator attempt budget and fallback sequence are preserved:
+
+| Attempt | Local LTX motion plan |
+| --- | --- |
+| Initial | Authored motion |
+| First semantic retry: motion mismatch only | One small head tilt by the first listed known character |
+| First semantic retry: identity, anatomy, visibility, cut, or continuity failure | Small visible breathing movement in place |
+| Safe-motion attempt after another failure | Compact minimal-motion plan with a fresh seed |
+| Safe-motion attempt fails | Existing deterministic static fallback |
+
+For scenes without a known character, retries request a small in-place subject
+movement without assuming human/animal anatomy. These recovery plans prioritize
+stable visible characters over reproducing the original complex action; they
+can reduce story-specific motion and still require visual review.
+
+Video metadata records `motion_policy_version`, `motion_policy_stage`,
+`effective_motion_prompt`, and `requested_prompt` (before worker token fitting).
+Semantic QC uses the effective motion for that artifact. Motion, identity,
+anatomy, source continuity, and scene-cut failures still fail QC; these generated
+retries do not receive the deterministic fallback's `static_hold` waiver.
+Runway retains its existing prompt and correction behavior.
+
+Changing a motion-only prompt clears the previous fallback policy and preserves
+the approved image. A changed prompt cannot inherit a static-hold QC waiver.
 
 ## Retry seeds
 
 The first Local LTX generation uses a deterministic seed derived from the
 scene ID. A Local LTX retry increments the previous seed by one. This
 makes retries reproducible while still allowing a different generated
-motion sample.
+motion sample. The last successful Local LTX seed is also stored at scene level,
+so safe-motion fallback and motion-only edits can invalidate the video without
+resetting the seed sequence. Existing jobs without this field use the seed from
+their current Local LTX video when available.
+
+## Validate against an existing job
+
+The baseline `20260920-075808` log reported steam/occlusion in scenes 2 and 3,
+and character deformation in scene 5. It also contains token-truncation warnings;
+it is not evidence of performance after the prompt-budget fix. Unit tests cannot
+establish GPU image quality or guarantee a lower fallback rate.
+
+Before branch changes, back up the authoritative local `jobs/video_job.json`.
+Before re-rendering, also copy `output/<job_id>` outside the working output tree
+to retain the old videos for comparison. Do not restore a repository job over
+the local runtime job.
+
+Run offline tests from the project root in the main `.venv`:
+
+```powershell
+python -m unittest discover -s src -p "test_local_ltx*.py" -v
+python -m unittest discover -s src -p "test_*.py" -v
+```
+
+Then test one previously failed scene with the real local job and approved image:
+
+```powershell
+. .\enter-dev.ps1
+$env:VIDEO_PROVIDER = "local_ltx"
+python src\visual_prompt_generator.py --scene 2 --motion-only --force
+python src\scene_orchestrator.py --scene 2 --reset-attempts --max-video-attempts 3
+```
+
+Only run the second command if motion generation succeeds. These commands call
+OpenAI for prompt/QC work and generate video on the local GPU. A standalone
+scene run uses the one-shot LTX worker unless a persistent service endpoint is
+already configured; the master pipeline still owns its persistent service.
+Reset attempts only for an intentional new comparison run, not ordinary resume.
+Start with scene 2, then repeat for 3 and 5 if the result warrants it. Compare
+character visibility, distortion, actual motion, attempt count, and fallback
+usage, not just final technical PASS. Keep 512x896, 24 fps, 12 steps, guidance
+3.0 and sequential offload fixed for that comparison.
 
 ## Failure behavior
 

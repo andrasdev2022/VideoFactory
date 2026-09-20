@@ -11,6 +11,7 @@ from openai import OpenAI
 from pydantic import BaseModel
 from validator import load_json, load_yaml
 from pipeline_status import set_legacy_status_from_stage
+from local_ltx_motion_policy import system_prompt, preserve_seed
 
 MAX_MOTION_PROMPT_CHARS = 400
 
@@ -318,7 +319,9 @@ def generate_visual_prompts(
         input=[
             {
                 "role": "system",
-                "content": SYSTEM_PROMPT,
+                "content": system_prompt(
+                    SYSTEM_PROMPT, os.getenv("VIDEO_PROVIDER", "local_ltx").strip().lower()
+                ),
             },
             {
                 "role": "user",
@@ -765,7 +768,10 @@ def generate_motion_prompt(
             {
                 "role": "system",
                 "content":
-                    MOTION_ONLY_SYSTEM_PROMPT,
+                    system_prompt(
+                        MOTION_ONLY_SYSTEM_PROMPT,
+                        os.getenv("VIDEO_PROVIDER", "local_ltx").strip().lower(),
+                    ),
             },
             {
                 "role": "user",
@@ -958,6 +964,12 @@ def apply_motion_only_output(
         # ---------------------------------------------
 
         if changed:
+
+            preserve_seed(visual_scene)
+            # A new authored motion is not the old fallback plan. In
+            # particular, do not let static_hold waive motion QC on a new clip.
+            visual_scene.pop("motion_strategy", None)
+            visual_scene.pop("semantic_qc_policy", None)
 
             if "video" in visual_scene:
 

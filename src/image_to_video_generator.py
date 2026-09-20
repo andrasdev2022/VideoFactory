@@ -10,6 +10,7 @@ import sys
 import urllib.request
 
 from runwayml import RunwayML
+from local_ltx_motion_policy import build_motion_plan, previous_seed as previous_ltx_seed
 from local_ltx_provider import (
     calculate_num_frames as calculate_ltx_num_frames,
     generate as generate_local_ltx,
@@ -353,6 +354,9 @@ def build_video_prompt(
     use_qc_feedback: bool = False,
 ) -> str:
 
+    if VIDEO_PROVIDER == "local_ltx":
+        return build_motion_plan(job, scene, retry=use_qc_feedback)["prompt"]
+
     motion_prompt = (
         scene.get(
             "motion_prompt",
@@ -382,24 +386,6 @@ def build_video_prompt(
         )
 
     # -----------------------------------------------------
-    # Local LTX has a 128-token text-encoder limit.
-    #
-    # Put continuity immediately after the requested motion so
-    # identity/clothing constraints survive any final provider-side
-    # token-budget compaction. Runway keeps the historical order.
-    # -----------------------------------------------------
-
-    if (
-        VIDEO_PROVIDER
-        == "local_ltx"
-        and continuity_notes
-    ):
-
-        parts.append(
-            f"Continuity: {continuity_notes}"
-        )
-
-    # -----------------------------------------------------
     # Previous QC correction
     # -----------------------------------------------------
 
@@ -408,10 +394,6 @@ def build_video_prompt(
         correction = build_qc_correction(
             job,
             scene,
-            include_observation=(
-                VIDEO_PROVIDER
-                != "local_ltx"
-            ),
         )
 
         if correction:
@@ -425,11 +407,7 @@ def build_video_prompt(
     # Continuity
     # -----------------------------------------------------
 
-    if (
-        VIDEO_PROVIDER
-        != "local_ltx"
-        and continuity_notes
-    ):
+    if continuity_notes:
 
         parts.append(
             f"Continuity: {continuity_notes}"
@@ -771,7 +749,9 @@ def generate_scene_video(
     if retry_from_qc:
 
         correction = (
-            build_qc_correction(
+            build_motion_plan(job, scene, retry=True)["stage"]
+            if VIDEO_PROVIDER == "local_ltx"
+            else build_qc_correction(
                 job,
                 scene,
             )
@@ -868,21 +848,8 @@ def generate_scene_video(
 
     else:
 
-        previous_video = scene.get(
-            "video",
-            {},
-        )
-
-        previous_seed = (
-            previous_video.get(
-                "seed"
-            )
-            if previous_video.get(
-                "provider"
-            )
-            == "local_ltx"
-            else None
-        )
+        previous_seed = previous_ltx_seed(scene)
+        motion_plan = build_motion_plan(job, scene, retry=retry_from_qc)
 
         result = generate_local_ltx(
             input_image=image_path,
@@ -897,7 +864,14 @@ def generate_scene_video(
             result.duration_sec
         )
 
+        scene["local_ltx_last_seed"] = result.seed
+
         provider_metadata = {
+            "motion_policy_version": motion_plan["version"],
+            "motion_policy_stage": motion_plan["stage"],
+            "effective_motion_prompt": motion_plan["motion_prompt"],
+            "requested_prompt": prompt_text,
+
             "provider":
                 "local_ltx",
 
