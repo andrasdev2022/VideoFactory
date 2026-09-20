@@ -153,7 +153,7 @@ $env:OPENAI_VISION_DETAIL = "high"
 
 # Protect Runway credits by default. Set this to "runway" explicitly
 # if you intentionally want to use the paid Runway provider.
-$env:VIDEO_PROVIDER = "local_ltx"
+if (-not $env:VIDEO_PROVIDER) { $env:VIDEO_PROVIDER = "local_ltx" }
 
 # Local LTX baseline for RTX 2070 / 8 GB VRAM.
 $env:LOCAL_LTX_PYTHON = Join-Path $ProjectRoot ".venv-ltx\Scripts\python.exe"
@@ -417,6 +417,10 @@ if ($env:VIDEO_PROVIDER -eq "local_ltx") {
     Write-Host "    steps = $env:LOCAL_LTX_INFERENCE_STEPS"
     Write-Host "    offload = $env:LOCAL_LTX_OFFLOAD_MODE"
     Write-Host "    persistent service = enabled by master pipeline"
+}
+elseif ($env:VIDEO_PROVIDER -eq "still_motion") {
+    Write-Host "    model = ffmpeg_still_motion_v1 (CPU, no LTX)"
+    Write-Host "    resolution = 720 x 1280; fps = 24"
 }
 else {
     Write-Host "    model = $env:RUNWAY_VIDEO_MODEL"

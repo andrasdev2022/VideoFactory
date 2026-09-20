@@ -1360,6 +1360,11 @@ def choose_next_action(
         == "failed"
     ):
 
+        # Repeating a deterministic render cannot repair a composition/QC
+        # failure. Stop for review instead of switching motion or providers.
+        if state.get("video_provider") == "still_motion":
+            return ACTION_STOP_VIDEO
+
         if (
             state.get(
                 "motion_strategy"

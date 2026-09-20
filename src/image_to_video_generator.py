@@ -10,6 +10,8 @@ import sys
 import urllib.request
 
 from runwayml import RunwayML
+import still_motion_provider
+from dataclasses import asdict
 from local_ltx_motion_policy import build_motion_plan, previous_seed as previous_ltx_seed
 from local_ltx_provider import (
     calculate_num_frames as calculate_ltx_num_frames,
@@ -354,6 +356,9 @@ def build_video_prompt(
     use_qc_feedback: bool = False,
 ) -> str:
 
+    if VIDEO_PROVIDER == "still_motion":
+        return still_motion_provider.motion_prompt(still_motion_provider.load_config())
+
     if VIDEO_PROVIDER == "local_ltx":
         return build_motion_plan(job, scene, retry=use_qc_feedback)["prompt"]
 
@@ -638,6 +643,10 @@ def generate_scene_video(
             )
         )
 
+    elif VIDEO_PROVIDER == "still_motion":
+        still_config = still_motion_provider.load_config()
+        provider_duration = still_motion_provider.frame_count(render_duration, still_config) / still_config.fps
+
     elif VIDEO_PROVIDER == "local_ltx":
 
         ltx_config = load_local_ltx_config()
@@ -674,7 +683,7 @@ def generate_scene_video(
             (
                 "Unsupported VIDEO_PROVIDER: "
                 f"{VIDEO_PROVIDER}. "
-                "Expected 'local_ltx' or 'runway'."
+                "Expected 'local_ltx', 'still_motion' or 'runway'."
             )
         )
 
@@ -844,6 +853,18 @@ def generate_scene_video(
                 str(
                     task.id
                 ),
+        }
+
+    elif VIDEO_PROVIDER == "still_motion":
+        provider_metadata = still_motion_provider.generate(
+            input_image=image_path, output_file=output_file,
+            duration_sec=render_duration, config=still_config,
+        )
+        scene["motion_strategy"] = "still_motion_v1"
+        scene["semantic_qc_policy"] = {
+            "version": "still_motion_v1",
+            "motion_mode": "static_hold" if still_config.mode == "hold" or still_config.max_zoom == 1 else "camera_only",
+            "allowed_exit_character_ids": [],
         }
 
     else:
@@ -1193,6 +1214,9 @@ def video_metadata_matches_current_request(
         {},
     )
 
+    if provider == "still_motion" and video.get("still_motion_config") != asdict(still_motion_provider.load_config()):
+        return False
+
     if video.get(
         "status"
     ) not in {
@@ -1525,6 +1549,7 @@ def main() -> int:
         return 1
 
     if VIDEO_PROVIDER not in {
+        "still_motion",
         "local_ltx",
         "runway",
     }:
@@ -1619,6 +1644,8 @@ def main() -> int:
             f"Model:    {VIDEO_MODEL}"
         )
 
+    elif VIDEO_PROVIDER == "still_motion":
+        print("Model:    ffmpeg_still_motion_v1")
     else:
 
         print(

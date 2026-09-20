@@ -19,6 +19,15 @@ LOCAL LTX OVERRIDE (takes precedence over general motion advice):
 
 
 def system_prompt(base: str, provider: str) -> str:
+    if provider == "still_motion":
+        return base + "\n" + (
+            "STILL-MOTION OVERRIDE: This video uses still images with a slow centered zoom, "
+            "not animated characters. Show each scene's story beat completely in its image. "
+            "Keep faces, ears, important props and text-free visual gags comfortably inside "
+            "the frame with at least 8 percent edge margin. motion_prompt must describe only "
+            "a gentle camera push-in; no independent character or object action. "
+            "Continuity notes describe appearance only, not required motion."
+        )
     return base + "\n" + GENERATION_RULES if provider == "local_ltx" else base
 
 
@@ -94,6 +103,6 @@ def build_motion_plan(job: dict, scene: dict, retry: bool = False) -> dict:
 
 def qc_motion_prompt(scene: dict) -> str | None:
     video = scene.get("video", {})
-    if video.get("provider") == "local_ltx" and video.get("effective_motion_prompt"):
+    if video.get("provider") in {"local_ltx", "still_motion"} and video.get("effective_motion_prompt"):
         return video["effective_motion_prompt"]
     return scene.get("motion_prompt")

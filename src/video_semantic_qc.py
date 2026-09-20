@@ -144,6 +144,10 @@ for continuing into final video production.
 Evaluate:
 
 MOTION
+- If semantic_qc_policy.motion_mode is "camera_only", only a gentle change
+  of image framing is expected. Do not require blinking, breathing, gestures
+  or independent subject motion. Check the requested camera motion, stable
+  identities, and whether cropping removes important faces or subjects.
 - Does the chronological frame sequence appear consistent with
   the requested motion?
 - Does the action meaningfully progress in the intended direction?
