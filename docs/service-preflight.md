@@ -134,6 +134,25 @@ $env:SERVICE_PREFLIGHT_ENABLED = "0"
 Disabling the preflight is intended only for troubleshooting. It does not
 change provider billing behavior.
 
+## Standalone diagnostic
+
+After loading the normal development environment, provider checks can be run
+without starting the production pipeline:
+
+```powershell
+. .\enter-dev.ps1
+python src\service_budget_preflight.py
+```
+
+To include estimates for the active `jobs/video_job.json`:
+
+```powershell
+python src\service_budget_preflight.py --job-budget
+```
+
+These commands perform account/quota reads only; they do not submit media
+generation requests.
+
 ## Example output
 
 ```text
