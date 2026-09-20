@@ -259,6 +259,28 @@ def check_elevenlabs(
         )
 
     try:
+        http_json(
+            url=(
+                f"{ELEVENLABS_API_BASE}"
+                "/v1/models"
+            ),
+            headers={
+                "xi-api-key": api_key,
+            },
+        )
+
+    except Exception as exc:
+        return ServiceCheck(
+            "elevenlabs",
+            BLOCK,
+            (
+                "ElevenLabs API authentication/"
+                f"availability check failed: {exc}"
+            ),
+            {},
+        )
+
+    try:
         subscription = http_json(
             url=(
                 f"{ELEVENLABS_API_BASE}"
@@ -272,12 +294,23 @@ def check_elevenlabs(
     except Exception as exc:
         return ServiceCheck(
             "elevenlabs",
-            BLOCK,
+            WARN,
             (
-                "ElevenLabs subscription "
-                f"check failed: {exc}"
+                "ElevenLabs API key is valid, but "
+                "subscription/quota information is "
+                "not readable with this key scope: "
+                f"{exc}"
             ),
-            {},
+            {
+                "authentication":
+                    "ok",
+
+                "quota_visibility":
+                    "unavailable",
+
+                "required_credits_estimate":
+                    required_credits,
+            },
         )
 
     used = float(
