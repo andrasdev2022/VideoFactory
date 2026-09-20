@@ -202,7 +202,7 @@ class ServiceBudgetPreflightTests(
                 "HTTP 401 from "
                 "https://api.elevenlabs.io/v1/user/subscription: "
                 '{"detail":{"code":"missing_permissions",'
-                '"message":"missing permission user_read"}}'
+                '"message":"missing permission models_read"}}'
             )
         )
 
@@ -248,8 +248,65 @@ class ServiceBudgetPreflightTests(
             1,
         )
 
-        self.assertIn(
-            "/v1/user/subscription",
+        self.assertEqual(
+            mocked_http.call_args.kwargs[
+                "url"
+            ],
+            (
+                "https://api.elevenlabs.io"
+                "/v1/user/subscription"
+            ),
+        )
+
+
+    def test_elevenlabs_insufficient_scope_warns_instead_of_blocking(
+        self,
+    ):
+
+        error = RuntimeError(
+            (
+                "HTTP 403 from "
+                "https://api.elevenlabs.io/v1/user/subscription: "
+                '{"detail":{"code":"insufficient_permissions",'
+                '"message":"insufficient permission user_read"}}'
+            )
+        )
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "ELEVENLABS_API_KEY":
+                        "test-key",
+                },
+            ),
+            patch(
+                "service_budget_preflight.http_json",
+                side_effect=error,
+            ) as mocked_http,
+        ):
+
+            check = check_elevenlabs()
+
+        self.assertEqual(
+            check.status,
+            WARN,
+        )
+
+        self.assertEqual(
+            check.details[
+                "quota_visibility"
+            ],
+            "permission_required",
+        )
+
+        self.assertEqual(
+            mocked_http.call_count,
+            1,
+        )
+
+        self.assertNotIn(
+            "/v1/models",
             mocked_http.call_args.kwargs[
                 "url"
             ],
