@@ -958,6 +958,12 @@ def estimate_elevenlabs_audio_credits(
         else 0.0
     )
 
+    override_ids = {scene.get('scene_id') for scene in job.get('visuals', {}).get('scenes', [])
+                    if scene.get('music_override')}
+    scene_music_seconds = sum(float(scene.get('timing', {}).get('render_duration_sec') or 0)
+        for scene in job.get('script', {}).get('scenes', []) if scene.get('scene_id') in override_ids)
+    music_credits += scene_music_seconds / 60.0 * music_rate
+
     sfx_seconds = 0.0
 
     if audio.get(
@@ -989,6 +995,7 @@ def estimate_elevenlabs_audio_credits(
     )
 
     return {
+        "scene_music_duration_sec": scene_music_seconds,
         "music_duration_sec":
             total_duration_sec
             if music_required

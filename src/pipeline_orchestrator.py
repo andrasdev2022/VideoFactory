@@ -1482,6 +1482,16 @@ def run_standard_stage(
         )
 
 
+def validate_scene_edit_timing(job: dict, spec: dict) -> None:
+    if not job.get('scene_edit_scope'):
+        return
+    from scene_timing import calculate_job_timing_summary
+    summary = calculate_job_timing_summary(job, spec)
+    if summary.get('within_spec_bounds') is not True:
+        raise PipelineError('Edited scene makes total duration fall outside the accepted range. '
+                            'Adjust its voiceover; other scenes will not be rewritten automatically.')
+
+
 def run_pipeline(
     args: argparse.Namespace,
 ) -> None:
@@ -1561,6 +1571,9 @@ def run_pipeline(
     # -----------------------------------------------------
     # Global timing normalization
     # -----------------------------------------------------
+
+    from genre_policy import runtime_spec
+    validate_scene_edit_timing(load_job(), runtime_spec(PROJECT_ROOT / 'config' / 'video_spec_v1.yaml'))
 
     # Re-evaluate saved timing against the current configured acceptance range.
     run_worker(

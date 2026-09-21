@@ -357,7 +357,7 @@ def build_video_prompt(
 ) -> str:
 
     if VIDEO_PROVIDER == "still_motion":
-        return still_motion_provider.motion_prompt(still_motion_provider.load_config())
+        return still_motion_provider.motion_prompt(still_motion_provider.load_config(scene.get("still_motion")))
 
     if VIDEO_PROVIDER == "local_ltx":
         return build_motion_plan(job, scene, retry=use_qc_feedback)["prompt"]
@@ -644,7 +644,7 @@ def generate_scene_video(
         )
 
     elif VIDEO_PROVIDER == "still_motion":
-        still_config = still_motion_provider.load_config()
+        still_config = still_motion_provider.load_config(scene.get("still_motion"))
         provider_duration = still_motion_provider.frame_count(render_duration, still_config) / still_config.fps
 
     elif VIDEO_PROVIDER == "local_ltx":
@@ -1214,7 +1214,7 @@ def video_metadata_matches_current_request(
         {},
     )
 
-    if provider == "still_motion" and video.get("still_motion_config") != asdict(still_motion_provider.load_config()):
+    if provider == "still_motion" and video.get("still_motion_config") != asdict(still_motion_provider.load_config(scene.get("still_motion"))):
         return False
 
     if video.get(

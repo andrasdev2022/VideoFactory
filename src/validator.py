@@ -229,7 +229,8 @@ def main() -> int:
     print("=" * 60)
 
     try:
-        spec = load_yaml(SPEC_FILE)
+        from genre_policy import runtime_spec
+        spec = runtime_spec(SPEC_FILE)
         job = load_json(JOB_FILE)
 
     except FileNotFoundError as exc:

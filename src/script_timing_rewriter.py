@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from genre_policy import genre_instruction
+
 import argparse
 import copy
 import json
@@ -65,14 +67,14 @@ REWRITABLE_FIELDS = (
 SYSTEM_PROMPT = """
 You rewrite short-form video voiceover text to satisfy a strict timing budget.
 
-The existing scene concept, joke, plot facts, character identities, visual action,
+The existing scene concept, emotional arc, plot facts, character identities, visual action,
 and continuity are already approved.
 
 Your job is ONLY to shorten the spoken wording.
 
 RULES:
 
-1. Preserve the exact story meaning and essential joke/punchline.
+1. Preserve the exact story meaning and essential emotional beat.
 2. Preserve character identities and relationships.
 3. Do not introduce new events, objects, actions, locations, or visual requirements.
 4. Do not change what the approved scene visually means.
@@ -604,7 +606,7 @@ def generate_rewrite(
         f"- target natural voice duration: "
         f"{budget['target_voice_duration_sec']:.3f} seconds\n\n"
         "Preserve the same scene meaning, story beat, "
-        "characters, visual action, and punchline.\n\n"
+        "characters, visual action, and emotional beat.\n\n"
         "Context:\n"
         + json.dumps(
             context,
@@ -637,7 +639,7 @@ def generate_rewrite(
                         "system",
 
                     "content":
-                        SYSTEM_PROMPT,
+                        SYSTEM_PROMPT + genre_instruction(job),
                 },
                 {
                     "role":

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from genre_policy import genre_instruction
+
 from pathlib import Path
 from typing import Literal
 import copy
@@ -10,12 +12,14 @@ import sys
 from openai import OpenAI
 from pydantic import BaseModel
 
-from validator import load_json, load_yaml, validate_video_job
+from validator import load_json, validate_video_job
 
 
 # ---------------------------------------------------------
 # PATHS
 # ---------------------------------------------------------
+
+from genre_policy import runtime_spec as load_yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -74,16 +78,16 @@ short-video script.
 Important rules:
 
 1. Follow the supplied VIDEO_SPEC.
-2. Preserve the original concept and core joke.
+2. Preserve the original concept and emotional arc.
 3. Do not invent new main characters unless necessary.
 4. Use only supplied character IDs in scene.visual.characters.
 5. Scene IDs must start at 1 and be sequential.
 6. The sum of all scene durations MUST exactly equal
    target_duration_sec.
 7. The opening scene must function as a strong hook.
-8. Keep pacing fast and appropriate for short-form video.
+8. Use genre-appropriate pacing within the short-form duration.
 9. Avoid unnecessary exposition.
-10. The ending must contain a clear payoff or punchline.
+10. The ending must contain a clear genre-appropriate resolution.
 11. Write natural spoken English for voiceover.
 12. Visual descriptions must be concrete enough for a future
     AI image/video generator.
@@ -164,7 +168,7 @@ Fix all of these problems:
         input=[
             {
                 "role": "system",
-                "content": SYSTEM_PROMPT,
+                "content": SYSTEM_PROMPT + genre_instruction(job),
             },
             {
                 "role": "user",

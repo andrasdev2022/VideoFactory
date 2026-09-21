@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from genre_policy import genre_instruction
+
 import argparse
 import json
 import os
@@ -392,7 +394,7 @@ def build_music_prompt(
         idea.get(
             "genre"
         )
-        or "short-form comedy"
+        or "short-form story"
     )
 
     concept = (
@@ -415,7 +417,11 @@ def build_music_prompt(
         f"background track for a vertical short-form video. "
         f"Style: {style}. Genre/context: {genre}. "
         f"Story context: {concept}. "
-        "Keep the arrangement light, playful, polished, and "
+        f"{genre_instruction(job)} "
+        + ("For this scene, the explicitly authored music style takes precedence over generic genre mood defaults. "
+           if job.get("_scene_music_request") else "")
+        +
+        "Keep the arrangement genre-appropriate, polished, and "
         "supportive of spoken narration. Use restrained dynamics "
         "and avoid large transient hits that could mask dialogue. "
         "No vocals, no speech, no spoken words, no artist imitation, "
@@ -562,8 +568,8 @@ def build_sfx_prompt(
     )
 
     suffix = (
-        " Short, clear, punchy, suitable for absurd corporate "
-        "comedy. No speech, no music bed, no narration, no branded "
+        " Short, clear, suitable for the scene and its genre. "
+        "No speech, no music bed, no narration, no branded "
         "sound, and no copyrighted audio."
     )
 
@@ -1169,6 +1175,7 @@ def generate_music(
     duration_ms: int,
     force: bool,
     api_key: str,
+    output_name: str = "background_music.mp3",
 ) -> bool:
 
     audio = job.setdefault(
@@ -1186,6 +1193,15 @@ def generate_music(
         False,
     ):
 
+        return False
+
+    edit = job.get('scene_edit_scope', {})
+    existing_file = music.get('audio_file')
+    if (output_name == 'background_music.mp3' and edit and not force
+            and 'voiceover' not in edit.get('fields', [])
+            and music.get('generation', {}).get('status') == 'passed'
+            and existing_file and (PROJECT_ROOT / existing_file).is_file()):
+        print('Preserving approved background music for this scene edit.')
         return False
 
     prompt = build_music_prompt(
@@ -1209,7 +1225,7 @@ def generate_music(
         / "audio"
         / "generated"
         / "music"
-        / "background_music.mp3"
+        / output_name
     )
 
     if (
@@ -1701,7 +1717,7 @@ def main() -> int:
 
         need_music = (
             not args.sfx_only
-            and music_required
+            and (music_required or any(s.get("music_override") for s in job.get("visuals", {}).get("scenes", [])))
         )
 
         need_sfx = (
@@ -1738,6 +1754,10 @@ def main() -> int:
                 )
                 or changed
             )
+
+        if not args.sfx_only:
+            from scene_music import generate_scene_music
+            changed = generate_scene_music(job, timeline, force=args.force, api_key=api_key) or changed
 
         if need_sfx:
 
