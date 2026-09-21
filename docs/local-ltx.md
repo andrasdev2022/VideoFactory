@@ -245,8 +245,10 @@ the local runtime job.
 Run offline tests from the project root in the main `.venv`:
 
 ```powershell
-python -m unittest discover -s src -p "test_local_ltx*.py" -v
-python -m unittest discover -s src -p "test_*.py" -v
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+python -m unittest discover -s test -p "test_local_ltx*.py" -v 2>&1 | Out-File .\logs\local-ltx-tests.log -Encoding utf8
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+python -m unittest discover -s test -p "test_*.py" -v 2>&1 | Out-File .\logs\unit-tests.log -Encoding utf8
 ```
 
 Then test one previously failed scene with the real local job and approved image:
