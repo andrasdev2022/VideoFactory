@@ -35,6 +35,13 @@ JOB_FILE = (
 )
 
 
+def volume_setting(name: str, default: float) -> float:
+    value = float(os.getenv(name, str(default)))
+    if not 0.0 <= value <= 1.0:
+        raise ValueError(f"{name} must be between 0 and 1.")
+    return value
+
+
 AUDIO_SAMPLE_RATE = int(
     os.getenv(
         "FINAL_MIX_AUDIO_SAMPLE_RATE",
@@ -481,12 +488,7 @@ def collect_mix_inputs(
                 music_path,
 
             "volume":
-                float(
-                    music_config.get(
-                        "volume",
-                        0.20,
-                    )
-                ),
+                volume_setting("FINAL_MIX_MUSIC_VOLUME", float(music_config.get("volume", 0.20))),
 
             "style":
                 music_config.get(
@@ -707,6 +709,8 @@ def collect_mix_inputs(
     scene_tracks = mix_scene_music(job, timeline, resolve_audio_file)
     if music is not None:
         music['mute_intervals'] = [(t['start_sec'], t['start_sec'] + t['duration_sec']) for t in scene_tracks]
+    for track in scene_tracks:
+        track['volume'] = volume_setting('FINAL_MIX_MUSIC_VOLUME', track['volume'])
     effects.extend(scene_tracks)
 
     return (
@@ -825,6 +829,7 @@ def build_source_signature(
         ],
 
         "mix_config": {
+            "voice_volume": volume_setting("FINAL_MIX_VOICE_VOLUME", 1.0),
             "sample_rate":
                 AUDIO_SAMPLE_RATE,
 
@@ -881,6 +886,11 @@ def build_filter_complex(
         filters[0] = filters[0].replace("[voice]", "[voice_raw]")
         filters.append("[voice_raw]asplit=" + str(1 + len(duck_labels)) +
                        "[voice]" + "".join(f"[{label}]" for label in duck_labels))
+
+    # Attenuate the audible voice after splitting: ducking still follows the
+    # original narration level, independently of the listening balance.
+    filters[-1] = filters[-1].replace("[voice]", "[voice_level]")
+    filters.append(f"[voice_level]volume={volume_setting('FINAL_MIX_VOICE_VOLUME', 1.0):.6f}[voice]")
 
     mix_labels = [
         "[voice]"
