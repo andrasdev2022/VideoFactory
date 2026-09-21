@@ -4,8 +4,8 @@ video:
   type: "short"
   aspect_ratio: "9:16"
   target_duration_sec: 30
-  min_duration_sec: 20
-  max_duration_sec: 45
+  min_duration_sec: 25
+  max_duration_sec: 35
   language: "en"
   resolution: "1080x1920"
   fps: 30

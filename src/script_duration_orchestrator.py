@@ -608,8 +608,11 @@ def main() -> int:
                 JOB_FILE
             )
 
-            if extend_visual_holds(job, load_yaml(PROJECT_ROOT / "config" / "video_spec_v1.yaml")):
-                save_job_atomic(job)
+            spec = load_yaml(PROJECT_ROOT / "config" / "video_spec_v1.yaml")
+            from scene_timing import calculate_job_timing_summary
+            job["timing_summary"] = calculate_job_timing_summary(job, spec)
+            extend_visual_holds(job, spec)
+            save_job_atomic(job)
 
             state = inspect_global_state(
                 job

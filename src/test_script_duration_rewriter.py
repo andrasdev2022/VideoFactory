@@ -313,7 +313,7 @@ class ScriptDurationRewriterTests(
                     "budgets"
                 ]
             ),
-            30.0,
+            35.0,
             places=3,
         )
 
@@ -354,7 +354,7 @@ class ScriptDurationRewriterTests(
                     "budgets"
                 ]
             ),
-            30.0,
+            25.0,
             places=3,
         )
 

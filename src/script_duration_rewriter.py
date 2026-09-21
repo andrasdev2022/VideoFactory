@@ -792,34 +792,11 @@ def build_rewrite_plan(
             "total render duration."
         )
 
-    target_total = float(
-        spec
-        .get(
-            "video",
-            {},
-        )
-        .get(
-            "target_duration_sec",
-            summary.get(
-                "target_duration_sec",
-                30,
-            ),
-        )
-    )
-
-    current_total = float(
-        current_total
-    )
-
-    if abs(
-        current_total
-        - target_total
-    ) < 1e-6:
-
-        raise RuntimeError(
-            "Current duration already equals "
-            "the global target."
-        )
+    from duration_policy import correction_target
+    current_total = float(current_total)
+    target_total = correction_target(current_total, spec)
+    if abs(current_total - target_total) < 1e-6:
+        raise RuntimeError("Global timing is already within the accepted duration range.")
 
     mode = (
         "shorten"

@@ -223,7 +223,7 @@ class FinalQCExportTests(
         )
 
 
-    def test_technical_qc_warns_outside_target_tolerance(
+    def test_technical_qc_accepts_configured_range_without_target_warning(
         self,
     ):
 
@@ -275,7 +275,7 @@ class FinalQCExportTests(
             [],
         )
 
-        self.assertTrue(
+        self.assertFalse(
             any(
                 "differs from target"
                 in warning

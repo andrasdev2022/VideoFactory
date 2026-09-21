@@ -284,29 +284,8 @@ def calculate_job_timing_summary(
         )
     )
 
-    minimum_duration = float(
-        spec
-        .get(
-            "video",
-            {},
-        )
-        .get(
-            "min_duration_sec",
-            20,
-        )
-    )
-
-    maximum_duration = float(
-        spec
-        .get(
-            "video",
-            {},
-        )
-        .get(
-            "max_duration_sec",
-            45,
-        )
-    )
+    from duration_policy import duration_range
+    minimum_duration, maximum_duration = duration_range(spec)
 
     completed = 0
     failed = 0
@@ -370,17 +349,7 @@ def calculate_job_timing_summary(
             <= maximum_duration
         )
 
-        target_deviation_too_large = (
-            abs(
-                difference
-            )
-            > TARGET_TOLERANCE_SEC
-        )
-
-        script_revision_recommended = (
-            not within_spec_bounds
-            or target_deviation_too_large
-        )
+        script_revision_recommended = not within_spec_bounds
 
     else:
 
@@ -417,7 +386,7 @@ def calculate_job_timing_summary(
             target_duration,
 
         "target_tolerance_sec":
-            TARGET_TOLERANCE_SEC,
+            min(target_duration - minimum_duration, maximum_duration - target_duration),
 
         "minimum_total_duration_sec":
             minimum_duration,
