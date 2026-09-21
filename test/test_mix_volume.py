@@ -40,3 +40,31 @@ class MixVolumeTests(unittest.TestCase):
             with patch.dict(os.environ, {'FINAL_MIX_VOICE_VOLUME': invalid}):
                 with self.assertRaises(ValueError):
                     mix.volume_setting('FINAL_MIX_VOICE_VOLUME', 1.0)
+
+    def test_sfx_gain_preserves_relative_levels_and_does_not_affect_music(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name in ('sfx.mp3', 'scene.mp3', 'source.mp4'):
+                (root / name).write_bytes(b'fixture')
+            job = {'audio': {'sound_effects': {'enabled': True, 'effects': [
+                {'scene_id': 1, 'audio_file': 'sfx.mp3', 'volume': v, 'offset_sec': 0}
+                for v in (0.4, 0.8)]}},
+                'visuals': {'scenes': [{'scene_id': 1, 'music_override': {
+                    'audio_file': 'scene.mp3', 'volume': 0.3, 'generation': {'status': 'passed'}}}]}}
+            signatures = []
+            for gain in (0, 0.5, 1, 1.5, 2):
+                with patch.object(mix, 'PROJECT_ROOT', root), patch.dict(os.environ, {
+                        'FINAL_MIX_SFX_VOLUME': str(gain), 'FINAL_MIX_MUSIC_VOLUME': '0.35'}):
+                    _, effects, _ = mix.collect_mix_inputs(job, [{'scene_id': 1, 'start_sec': 0, 'end_sec': 3}])
+                    self.assertAlmostEqual(effects[0]['volume'], 0.4 * gain)
+                    self.assertAlmostEqual(effects[1]['volume'], 0.8 * gain)
+                    self.assertEqual(effects[2]['volume'], 0.35)
+                    signatures.append(mix.build_source_signature(root / 'source.mp4', 'base', None, effects, 3))
+            self.assertEqual(job['audio']['sound_effects']['effects'][0]['volume'], 0.4)
+            self.assertEqual(len({str(s) for s in signatures}), 5)
+
+    def test_sfx_gain_rejects_invalid_values(self):
+        for invalid in ('-1', '2.1', 'nan', 'inf', 'invalid'):
+            with patch.dict(os.environ, {'FINAL_MIX_SFX_VOLUME': invalid}):
+                with self.assertRaises(ValueError):
+                    mix.collect_mix_inputs({}, [])

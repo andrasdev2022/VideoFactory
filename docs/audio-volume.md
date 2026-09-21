@@ -8,13 +8,18 @@ A `final_qc_export.py --force` utána frissíti a végső videót és exportot.
 | --- | --- | --- |
 | `FINAL_MIX_MUSIC_VOLUME` | A job zenéjének `volume` mezője, tipikusan 0.20 | 0.35 |
 | `FINAL_MIX_VOICE_VOLUME` | 1.0 | 0.85 |
+| `FINAL_MIX_SFX_VOLUME` | 1.0 (eredeti effektarányok) | 0.70 |
 | `FINAL_MIX_DUCK_RATIO` | 8.0 | 2.0 |
 
-A volume értékek 0–1 közötti lineáris jelszintszorzók, nem érzékelt hangerőszázalékok.
+A zene és narráció volume értékei 0–1 közötti lineáris jelszintszorzók, nem érzékelt hangerőszázalékok.
+Az SFX-szorzó 0–2 között állítható: minden effekt saját mentett hangerőértékét
+szorozza, így az egymáshoz viszonyított arányok megmaradnak. `0` némít, `0.5`
+felezi a jelszintet, `1` változatlan, `1.5` erősít. Erősítés után ellenőrizd,
+hogy a sűrű hangrészek nem torzítanak-e.
 A kisebb duck ratio kevésbé halkítja a zenét narráció alatt; 1.0 kikapcsolja ezt
 a kompressziót. A narráció hangerőszorzója nem változtatja meg a ducking érzékelőjét.
-A zenei felülírás a jelenetszintű zenékre is vonatkozik; az effektek hangereje
-változatlan. A beállítások bekerülnek a mix cache-aláírásába.
+A zenei felülírás a jelenetszintű zenékre is vonatkozik. Az SFX-szorzó ezeket
+a zenei sávokat és a narrációt nem módosítja. A beállítások bekerülnek a mix cache-aláírásába.
 
 A projekt gyökerében, az aktivált fő `.venv`-ből:
 
@@ -27,6 +32,7 @@ Copy-Item ".\output\$($job.job_id)\final\video.mp4" "..\video-before-remix-$stam
 
 $env:FINAL_MIX_MUSIC_VOLUME = '0.35'
 $env:FINAL_MIX_VOICE_VOLUME = '0.85'
+$env:FINAL_MIX_SFX_VOLUME = '0.70'
 $env:FINAL_MIX_DUCK_RATIO = '2.0'
 $env:PYTHONIOENCODING = 'utf-8'
 $log = ".\logs\remix-$stamp.log"
@@ -51,5 +57,6 @@ is felvehetők. Visszaállítás a munkamenetben:
 ```powershell
 Remove-Item Env:FINAL_MIX_MUSIC_VOLUME -ErrorAction SilentlyContinue
 Remove-Item Env:FINAL_MIX_VOICE_VOLUME -ErrorAction SilentlyContinue
+Remove-Item Env:FINAL_MIX_SFX_VOLUME -ErrorAction SilentlyContinue
 Remove-Item Env:FINAL_MIX_DUCK_RATIO -ErrorAction SilentlyContinue
 ```

@@ -35,10 +35,10 @@ JOB_FILE = (
 )
 
 
-def volume_setting(name: str, default: float) -> float:
+def volume_setting(name: str, default: float, maximum: float = 1.0) -> float:
     value = float(os.getenv(name, str(default)))
-    if not 0.0 <= value <= 1.0:
-        raise ValueError(f"{name} must be between 0 and 1.")
+    if not 0.0 <= value <= maximum:
+        raise ValueError(f"{name} must be between 0 and {maximum:g}.")
     return value
 
 
@@ -704,6 +704,10 @@ def collect_mix_inputs(
                         timing_source,
                 }
             )
+
+    sfx_gain = volume_setting('FINAL_MIX_SFX_VOLUME', 1.0, maximum=2.0)
+    for effect in effects:
+        effect['volume'] *= sfx_gain
 
     from scene_music import mix_scene_music
     scene_tracks = mix_scene_music(job, timeline, resolve_audio_file)
