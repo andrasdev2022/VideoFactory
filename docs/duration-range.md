@@ -10,7 +10,8 @@ video:
 ```
 
 The inclusive 25–35 second range accepts a measured 25.25 second job without
-rewriting speech or adding holds. Thirty seconds remains the creative target.
+rewriting speech or adding holds. Thirty seconds remains the creative target. Set minimum and maximum to the
+same value only when exact-duration planning is required.
 The old scene/final target-tolerance environment variables no longer decide
 acceptance; change the YAML minimum and maximum instead.
 
