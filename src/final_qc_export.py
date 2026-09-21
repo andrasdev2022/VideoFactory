@@ -548,26 +548,8 @@ def evaluate_technical_media(
         "duration_sec"
     )
 
-    minimum = float(
-        video_spec.get(
-            "min_duration_sec",
-            0,
-        )
-    )
-
-    maximum = float(
-        video_spec.get(
-            "max_duration_sec",
-            999999,
-        )
-    )
-
-    target = float(
-        video_spec.get(
-            "target_duration_sec",
-            0,
-        )
-    )
+    from duration_policy import duration_range
+    minimum, maximum = duration_range(spec)
 
     if duration is None:
 
@@ -581,10 +563,12 @@ def evaluate_technical_media(
             duration
         )
 
+        # The encoder can round the final packet to the next output frame.
+        frame_slack = 1.0 / max(float(video_spec.get("fps", 30)), 1.0)
         if not (
-            minimum
+            minimum - 1e-6
             <= duration
-            <= maximum
+            <= maximum + frame_slack + 1e-6
         ):
 
             errors.append(
@@ -592,23 +576,6 @@ def evaluate_technical_media(
                     f"Final duration is {duration:.3f}s; "
                     f"required range is {minimum:.3f}-"
                     f"{maximum:.3f}s."
-                )
-            )
-
-        if (
-            target > 0
-            and abs(
-                duration
-                - target
-            )
-            > TARGET_DURATION_TOLERANCE_SEC
-        ):
-
-            warnings.append(
-                (
-                    f"Final duration differs from target "
-                    f"{target:.3f}s by "
-                    f"{duration - target:+.3f}s."
                 )
             )
 

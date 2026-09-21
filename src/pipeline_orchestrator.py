@@ -1562,11 +1562,8 @@ def run_pipeline(
     # Global timing normalization
     # -----------------------------------------------------
 
-    global_timing_runner = (
-        run_worker if os.getenv("VIDEO_PROVIDER", "runway").strip().lower() == "still_motion"
-        else run_standard_stage
-    )
-    global_timing_runner(
+    # Re-evaluate saved timing against the current configured acceptance range.
+    run_worker(
         STAGE_GLOBAL_TIMING,
         "script_duration_orchestrator.py",
         [

@@ -66,9 +66,9 @@ The renderer integration test uses synthetic images and real FFmpeg/ffprobe
 when installed. It calls no AI APIs. A complete live E2E still needs to run
 on the configured Windows machine.
 
-## Narration shorter than the target
+## Narration shorter than the accepted minimum
 
-Still-motion jobs with approved voice QC can reach the configured target duration
+Still-motion jobs with approved voice QC can reach the configured minimum duration
 using visual holds after narration. The existing audio, text, and speaking speed
 are preserved; the assembler pads the voice track with silence while background
 music continues. Extra time is distributed equally across scenes, redistributing

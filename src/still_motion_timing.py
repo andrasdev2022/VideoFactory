@@ -28,10 +28,8 @@ def extend_visual_holds(job: dict, spec: dict) -> bool:
             return False
         durations.append(duration)
         limits.append(limit)
-    video = spec.get('video', {})
-    target = float(video.get('target_duration_sec', 30))
-    if not math.isfinite(target) or not float(video.get('min_duration_sec', 20)) <= target <= float(video.get('max_duration_sec', 45)):
-        return False
+    from duration_policy import duration_range
+    target, _ = duration_range(spec)
     remaining = round(target - sum(durations), 3)
     if remaining <= 0.001 or sum(limits) + 0.001 < target:
         return False
