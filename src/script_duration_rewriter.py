@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from genre_policy import genre_instruction
+
 import argparse
 import copy
 import json
@@ -19,9 +21,10 @@ from pipeline_status import (
 
 from validator import (
     load_json,
-    load_yaml,
 )
 
+
+from genre_policy import runtime_spec as load_yaml
 
 PROJECT_ROOT = (
     Path(__file__)
@@ -83,18 +86,18 @@ REWRITABLE_FIELDS = (
 SYSTEM_PROMPT = """
 You normalize the total spoken duration of a short-form video script.
 
-The visual scenes, character identities, plot, joke structure, scene count,
+The visual scenes, character identities, plot, emotional structure, scene count,
 and scene order are already approved.
 
 You may ONLY rewrite the spoken wording of the supplied scenes.
 
 RULES:
 
-1. Preserve every scene's existing story beat and essential joke.
+1. Preserve every scene's existing story beat and essential emotional beat.
 2. Preserve character identities, relationships, and chronology.
 3. Do not add new events, objects, actions, locations, or visual requirements.
 4. Do not move information from one scene to another.
-5. Keep the hook punchy and preserve the ending/punchline.
+5. Keep the hook punchy and preserve the ending.
 6. Use natural conversational spoken English.
 7. Never solve timing by implying faster or slower speech.
 8. For shortening, remove redundancy, filler, and unnecessary explanation.
@@ -1216,7 +1219,7 @@ def generate_rewrite(
                         "system",
 
                     "content":
-                        SYSTEM_PROMPT,
+                        SYSTEM_PROMPT + genre_instruction(job),
                 },
                 {
                     "role":

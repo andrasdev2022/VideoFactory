@@ -40,7 +40,8 @@ class VisualStylesTests(unittest.TestCase):
             job = new_job.build_job(fixture.make_output(), selected, 'test')
             self.assertNotIn('preset', job['style'])
             self.assertEqual(job['style']['visual'], fixture.make_output().style.visual)
-            self.assertEqual(styles.style_instruction(job), '')
+            self.assertNotIn('VISUAL STYLE OVERRIDE', styles.style_instruction(job))
+            self.assertIn('CREATIVE DIRECTION', styles.style_instruction(job))
 
     def test_both_prompt_contexts_use_saved_style(self):
         spec = {'video': {'aspect_ratio': '9:16', 'resolution': '1080x1920', 'fps': 30},

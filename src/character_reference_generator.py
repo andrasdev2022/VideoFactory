@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from genre_policy import genre_instruction
+
 from visual_styles import effective_visual_spec, style_instruction
 
 from pathlib import Path
@@ -11,12 +13,14 @@ import sys
 from openai import OpenAI
 from pydantic import BaseModel
 
-from validator import load_json, load_yaml
+from validator import load_json
 
 
 # ---------------------------------------------------------
 # PATHS
 # ---------------------------------------------------------
+
+from genre_policy import runtime_spec as load_yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -173,7 +177,7 @@ def generate_character_reference_prompts(
         input=[
             {
                 "role": "system",
-                "content": SYSTEM_PROMPT,
+                "content": SYSTEM_PROMPT + genre_instruction(job),
             },
             {
                 "role": "user",

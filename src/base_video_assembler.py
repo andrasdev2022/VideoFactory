@@ -16,7 +16,6 @@ from pipeline_status import (
 
 from validator import (
     load_json,
-    load_yaml,
 )
 
 from video_qc import (
@@ -24,6 +23,8 @@ from video_qc import (
     run_ffprobe,
 )
 
+
+from genre_policy import runtime_spec as load_yaml
 
 PROJECT_ROOT = (
     Path(__file__)

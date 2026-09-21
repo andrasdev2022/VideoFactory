@@ -10,9 +10,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from validator import load_json, load_yaml
+from validator import load_json
 from still_motion_timing import extend_visual_holds
 
+
+from genre_policy import runtime_spec as load_yaml
 
 PROJECT_ROOT = (
     Path(__file__)

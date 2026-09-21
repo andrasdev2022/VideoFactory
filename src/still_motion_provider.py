@@ -16,10 +16,11 @@ class Config:
     fps: int = 24
 
 
-def load_config():
+def load_config(overrides=None):
+    overrides = overrides or {}
     config = Config(
-        mode=os.getenv("STILL_MOTION_MODE", "zoom").strip().lower(),
-        max_zoom=float(os.getenv("STILL_MOTION_MAX_ZOOM", "1.05")),
+        mode=str(overrides.get("mode", os.getenv("STILL_MOTION_MODE", "zoom"))).strip().lower(),
+        max_zoom=float(overrides.get("max_zoom", os.getenv("STILL_MOTION_MAX_ZOOM", "1.05"))),
     )
     if config.mode not in {"zoom", "hold"}:
         raise ValueError("STILL_MOTION_MODE must be zoom or hold (pan is not enabled).")

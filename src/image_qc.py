@@ -9,12 +9,14 @@ import sys
 
 from PIL import Image, ImageStat, UnidentifiedImageError
 
-from validator import load_json, load_yaml
+from validator import load_json
 
 
 # ---------------------------------------------------------
 # PATHS
 # ---------------------------------------------------------
+
+from genre_policy import runtime_spec as load_yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 

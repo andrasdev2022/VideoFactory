@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from genre_policy import genre_instruction
+
 from visual_styles import effective_visual_spec, style_instruction
 
 from pathlib import Path
@@ -11,7 +13,7 @@ import argparse
 
 from openai import OpenAI
 from pydantic import BaseModel
-from validator import load_json, load_yaml
+from validator import load_json
 from pipeline_status import set_legacy_status_from_stage
 from local_ltx_motion_policy import system_prompt, preserve_seed
 
@@ -20,6 +22,8 @@ MAX_MOTION_PROMPT_CHARS = 400
 # ---------------------------------------------------------
 # PATHS
 # ---------------------------------------------------------
+
+from genre_policy import runtime_spec as load_yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -323,7 +327,7 @@ def generate_visual_prompts(
             {
                 "role": "system",
                 "content": system_prompt(
-                    SYSTEM_PROMPT, os.getenv("VIDEO_PROVIDER", "local_ltx").strip().lower()
+                    SYSTEM_PROMPT + genre_instruction(job), os.getenv("VIDEO_PROVIDER", "local_ltx").strip().lower()
                 ),
             },
             {
@@ -772,7 +776,7 @@ def generate_motion_prompt(
                 "role": "system",
                 "content":
                     system_prompt(
-                        MOTION_ONLY_SYSTEM_PROMPT,
+                        MOTION_ONLY_SYSTEM_PROMPT + genre_instruction(job),
                         os.getenv("VIDEO_PROVIDER", "local_ltx").strip().lower(),
                     ),
             },

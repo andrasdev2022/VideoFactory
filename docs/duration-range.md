@@ -1,6 +1,8 @@
 # Accepted video duration
 
-`config/video_spec_v1.yaml` is the shared source for timing and final QC:
+`config/video_spec_v1.yaml` defines timing and final QC for new jobs. New jobs
+save a `spec_snapshot`; resume uses that snapshot, while legacy jobs without one
+continue reading the YAML:
 
 ```yaml
 video:

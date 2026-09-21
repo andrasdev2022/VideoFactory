@@ -10,11 +10,16 @@ PowerShell (UTF-8 log, including stderr and exit status):
 New-Item -ItemType Directory -Force .\logs | Out-Null
 $env:PYTHONPATH = (Resolve-Path .\src).Path
 $log = ".\logs\unit-tests-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
-python -m unittest discover -s test -p 'test_*.py' -v 2>&1 | Out-File $log -Encoding utf8
+$env:PYTHONIOENCODING = 'utf-8'
+$command = 'python -u -m unittest discover -s test -p "test_*.py" -v > "{0}" 2>&1' -f $log
+cmd.exe /d /c $command
 $testExitCode = $LASTEXITCODE
 "Exit code: $testExitCode" | Out-File $log -Append -Encoding utf8
 Write-Host "Test exit code: $testExitCode; log: $log"
 ```
+
+Redirection happens inside cmd.exe so Windows PowerShell does not turn expected
+stderr (including argparse rejection tests) into NativeCommandError records.
 
 For a specific module, change the pattern, for example to
 `-p 'test_duration_policy.py'`.

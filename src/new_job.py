@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from genre_policy import prepare_spec, genre_instruction, genre_name
 from visual_styles import CHOICES, select_style, persist_style
 
+from copy import deepcopy
 import argparse
 import json
 import os
@@ -35,7 +37,7 @@ class IdeaBlueprint(BaseModel):
     genre: str
     target_audience: str
     hook: str
-    core_joke: str
+    core_joke: str = ""  # Legacy field; empty for non-comedy genres.
     ending: str
 
 
@@ -78,6 +80,7 @@ Convert the user's rough seed into a production-ready story blueprint.
 
 Rules:
 - Preserve the user's core idea.
+- Follow the supplied genre across the story, metadata and music. For non-comedy genres, core_joke must be empty; use an emotional conflict instead.
 - If visual_spec.style.preset is present, it overrides conflicting visual-medium or realism wording in the seed. Use it consistently for style and character appearance.
 - Write the production content in English.
 - Make it suitable for a roughly 30-second vertical short.
@@ -163,7 +166,7 @@ def sanitize_hashtags(
     defaults = [
         "#shorts",
         "#ai",
-        "#funny",
+        "#story",
     ]
 
     for value in defaults:
@@ -310,6 +313,7 @@ def generate_bootstrap(
     spec: dict,
 ) -> BootstrapOutput:
 
+    spec = prepare_spec(spec)
     context = build_generation_context(
         seed,
         spec,
@@ -324,7 +328,7 @@ def generate_bootstrap(
                     "system",
 
                 "content":
-                    SYSTEM_PROMPT,
+                    SYSTEM_PROMPT + genre_instruction(spec=spec),
             },
             {
                 "role":
@@ -524,6 +528,10 @@ def build_job(
         in platforms.items()
     }
 
+    spec = prepare_spec(spec)
+    idea["genre"] = genre_name(spec)
+    if "comedy" not in genre_name(spec).lower():
+        idea["core_joke"] = ""
     style = persist_style(output.style.model_dump(), spec)
 
     style[
@@ -531,6 +539,8 @@ def build_job(
     ] = True
 
     return {
+        "spec_snapshot": deepcopy(spec),
+        "creative_direction": {"genre": genre_name(spec)},
         "job_id":
             job_id,
 
@@ -588,7 +598,7 @@ def build_job(
                     ),
 
                 "style":
-                    "energetic storyteller",
+                    spec.get("audio", {}).get("voiceover", {}).get("style", "natural storyteller"),
 
                 "speed":
                     1.0,
@@ -765,7 +775,7 @@ def main() -> int:
             SPEC_FILE
         )
 
-        spec = select_style(spec, args.visual_style)
+        spec = prepare_spec(select_style(spec, args.visual_style))
         print(f"Visual style: {args.visual_style or 'default'}")
 
         client = OpenAI()

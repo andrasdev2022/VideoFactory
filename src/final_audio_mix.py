@@ -35,6 +35,13 @@ JOB_FILE = (
 )
 
 
+def volume_setting(name: str, default: float, maximum: float = 1.0) -> float:
+    value = float(os.getenv(name, str(default)))
+    if not 0.0 <= value <= maximum:
+        raise ValueError(f"{name} must be between 0 and {maximum:g}.")
+    return value
+
+
 AUDIO_SAMPLE_RATE = int(
     os.getenv(
         "FINAL_MIX_AUDIO_SAMPLE_RATE",
@@ -481,12 +488,7 @@ def collect_mix_inputs(
                 music_path,
 
             "volume":
-                float(
-                    music_config.get(
-                        "volume",
-                        0.20,
-                    )
-                ),
+                volume_setting("FINAL_MIX_MUSIC_VOLUME", float(music_config.get("volume", 0.20))),
 
             "style":
                 music_config.get(
@@ -703,6 +705,18 @@ def collect_mix_inputs(
                 }
             )
 
+    sfx_gain = volume_setting('FINAL_MIX_SFX_VOLUME', 1.0, maximum=2.0)
+    for effect in effects:
+        effect['volume'] *= sfx_gain
+
+    from scene_music import mix_scene_music
+    scene_tracks = mix_scene_music(job, timeline, resolve_audio_file)
+    if music is not None:
+        music['mute_intervals'] = [(t['start_sec'], t['start_sec'] + t['duration_sec']) for t in scene_tracks]
+    for track in scene_tracks:
+        track['volume'] = volume_setting('FINAL_MIX_MUSIC_VOLUME', track['volume'])
+    effects.extend(scene_tracks)
+
     return (
         music,
         effects,
@@ -767,6 +781,7 @@ def build_source_signature(
                             "volume"
                         ],
 
+                    "mute_intervals": music.get("mute_intervals", []),
                     "style":
                         music.get(
                             "style"
@@ -779,6 +794,8 @@ def build_source_signature(
 
         "effects": [
             {
+                "duration_sec": effect.get("duration_sec"),
+                "kind": effect.get("kind"),
                 "index":
                     effect[
                         "index"
@@ -816,6 +833,7 @@ def build_source_signature(
         ],
 
         "mix_config": {
+            "voice_volume": volume_setting("FINAL_MIX_VOICE_VOLUME", 1.0),
             "sample_rate":
                 AUDIO_SAMPLE_RATE,
 
@@ -866,6 +884,18 @@ def build_filter_complex(
         )
     )
 
+    duck_labels = (["duck_main"] if music is not None else []) + [
+        f"duck_scene{i}" for i, effect in enumerate(effects) if effect.get("kind") == "scene_music"]
+    if duck_labels:
+        filters[0] = filters[0].replace("[voice]", "[voice_raw]")
+        filters.append("[voice_raw]asplit=" + str(1 + len(duck_labels)) +
+                       "[voice]" + "".join(f"[{label}]" for label in duck_labels))
+
+    # Attenuate the audible voice after splitting: ducking still follows the
+    # original narration level, independently of the listening balance.
+    filters[-1] = filters[-1].replace("[voice]", "[voice_level]")
+    filters.append(f"[voice_level]volume={volume_setting('FINAL_MIX_VOICE_VOLUME', 1.0):.6f}[voice]")
+
     mix_labels = [
         "[voice]"
     ]
@@ -900,6 +930,9 @@ def build_filter_complex(
             f"volume={music['volume']:.6f}"
         )
 
+        for start, end in music.get("mute_intervals", []):
+            music_chain += f",volume=0:enable='gte(t,{start:.6f})*lt(t,{end:.6f})'"
+
         if fade_duration > 0:
 
             music_chain += (
@@ -920,7 +953,7 @@ def build_filter_complex(
 
         filters.append(
             (
-                "[music_preduck][voice]"
+                "[music_preduck][duck_main]"
                 "sidechaincompress="
                 f"threshold={MUSIC_DUCK_THRESHOLD}:"
                 f"ratio={MUSIC_DUCK_RATIO}:"
@@ -958,6 +991,14 @@ def build_filter_complex(
             f"sfx{effect_index}"
         )
 
+        scene_music = effect.get("kind") == "scene_music"
+        duration = float(effect.get("duration_sec", total_duration))
+        local_filter = ""
+        if scene_music:
+            fade = min(0.15, duration / 2)
+            local_filter = (f"apad,atrim=duration={duration:.6f},asetpts=PTS-STARTPTS,"
+                f"afade=t=in:d={fade:.6f},afade=t=out:st={duration-fade:.6f}:d={fade:.6f},")
+
         filters.append(
             (
                 f"[{input_index}:a]"
@@ -965,6 +1006,7 @@ def build_filter_complex(
                 "aformat=sample_fmts=fltp:"
                 f"sample_rates={AUDIO_SAMPLE_RATE}:"
                 "channel_layouts=stereo,"
+                f"{local_filter}"
                 f"volume={effect['volume']:.6f},"
                 f"adelay={delay_ms}|{delay_ms},"
                 f"atrim=duration={total_duration:.3f},"
@@ -972,6 +1014,12 @@ def build_filter_complex(
                 f"[{label}]"
             )
         )
+
+        if scene_music:
+            filters[-1] = filters[-1].replace(f"[{label}]", f"[{label}_raw]")
+            filters.append(f"[{label}_raw][duck_scene{effect_index}]sidechaincompress="
+                f"threshold={MUSIC_DUCK_THRESHOLD}:ratio={MUSIC_DUCK_RATIO}:"
+                f"attack={MUSIC_DUCK_ATTACK_MS}:release={MUSIC_DUCK_RELEASE_MS}[{label}]")
 
         mix_labels.append(
             f"[{label}]"

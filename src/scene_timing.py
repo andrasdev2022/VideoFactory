@@ -13,9 +13,10 @@ from pipeline_status import (
 
 from validator import (
     load_json,
-    load_yaml,
 )
 
+
+from genre_policy import runtime_spec as load_yaml
 
 PROJECT_ROOT = (
     Path(__file__)

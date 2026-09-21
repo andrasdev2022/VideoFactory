@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from genre_policy import genre_instruction
+
 import argparse
 import json
 import os
@@ -15,9 +17,10 @@ from pipeline_status import (
 
 from validator import (
     load_json,
-    load_yaml,
 )
 
+
+from genre_policy import runtime_spec as load_yaml
 
 PROJECT_ROOT = (
     Path(__file__)
@@ -352,11 +355,12 @@ def build_voice_instructions(
         f"Use a natural conversational speaking pace. "
         f"Do not rush the delivery to fit a time limit. "
         f"Keep pauses natural and expressive. "
-        f"Sound clear, punchy, engaging, and human. "
+        f"Sound clear, engaging, emotionally appropriate, and human. "
         f"Maintain the same narrator identity and vocal "
         f"character across scenes. "
         f"Do not add, remove, paraphrase, or repeat words. "
         f"Read exactly the supplied text."
+        + genre_instruction(spec=spec)
     )
 
 

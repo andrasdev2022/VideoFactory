@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from genre_policy import genre_instruction
+
 import argparse
 import json
 import os
@@ -736,7 +738,7 @@ def main() -> int:
                         "system",
 
                     "content":
-                        SYSTEM_PROMPT,
+                        SYSTEM_PROMPT + genre_instruction(job),
                 },
                 {
                     "role":

@@ -1,5 +1,6 @@
 """Explicit, job-persisted visual style presets, independent of video provider."""
 from copy import deepcopy
+from genre_policy import genre_instruction
 
 PRESETS = {
     'photorealistic': (True, 'Photorealistic photography, natural proportions, lifelike skin texture and materials; no cartoon, illustration, or stylized 3D rendering.'),
@@ -43,8 +44,8 @@ def effective_visual_spec(spec: dict, job: dict) -> dict:
 def style_instruction(job: dict) -> str:
     style = job.get('style', {})
     if style.get('preset') not in PRESETS:
-        return ''
+        return genre_instruction(job) if job.get("creative_direction") else ""
     return ('\nVISUAL STYLE OVERRIDE: The saved job style is authoritative for rendering medium, '
             'realism and proportions, even if older scene wording or story ideas suggest another medium. '
             'Keep the story content and character identity. Apply consistently to every reference and scene. '
-            + style['visual'] + '\n')
+            + style['visual'] + '\n' + genre_instruction(job))
