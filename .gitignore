@@ -26,3 +26,6 @@ jobs/history/
 Thumbs.db
 .vscode/
 .idea/
+
+# Test logs
+logs/

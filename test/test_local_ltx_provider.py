@@ -205,9 +205,9 @@ def test_worker_binds_image_to_video_pipeline_name(
 
         worker_file = (
             Path(__file__)
-            .with_name(
-                "local_ltx_worker.py"
-            )
+            .resolve().parents[1]
+            / "src"
+            / "local_ltx_worker.py"
         )
 
         source = worker_file.read_text(

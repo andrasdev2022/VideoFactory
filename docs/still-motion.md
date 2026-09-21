@@ -56,9 +56,11 @@ new job. The environment loader preserves an explicitly selected provider.
 ## Offline tests
 
 ```powershell
-python -m unittest discover -s src -p "test_still_motion_provider.py" -v 2>&1 |
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+python -m unittest discover -s test -p "test_still_motion_provider.py" -v 2>&1 |
     Out-File .\logs\still-motion-unit.log -Encoding utf8
-python -m unittest discover -s src -p "test_*.py" -v 2>&1 |
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+python -m unittest discover -s test -p "test_*.py" -v 2>&1 |
     Out-File .\logs\all-unit-tests.log -Encoding utf8
 ```
 

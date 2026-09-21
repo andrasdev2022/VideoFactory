@@ -27,6 +27,7 @@ New full pipeline runs include this step automatically, regardless of video prov
 
 ```powershell
 New-Item -ItemType Directory -Force .\logs | Out-Null
-python -m unittest discover -s src -p 'test_*.py' -v *> .\logs\thumbnail-unit-tests.log
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+python -m unittest discover -s test -p 'test_*.py' -v 2>&1 | Out-File .\logs\thumbnail-unit-tests.log -Encoding utf8
 if ($LASTEXITCODE -ne 0) { throw 'Unit tests failed; see logs\thumbnail-unit-tests.log' }
 ```
