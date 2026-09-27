@@ -1,7 +1,9 @@
 # VideoFactory — projektátadó
 
-Frissítve: **2026-09-22**. Ellenőrzött kiinduló `main` commit:
-`aadcc4ab70c170c043c045af184efdc719980bcd` (PR #21 merge).
+Frissítve: **2026-09-27**. Ellenőrzött kiinduló `main` commit:
+`6415ac83123a5e8cd2c5d61e87d47dbec02cd470` (PR #22, első projektátadó merge).
+A legutóbbi igazolt helyi futás 2026-09-22-i; a szeptember 27-i Windows-runtime
+állapotát nem olvastuk vissza.
 Ez állapotfelvétel; új munkamenet elején ellenőrizd az aktuális repót és a helyi
 runtime jobot. A dokumentum nem helyettesíti a Windows gépen lévő futási állapotot.
 
@@ -15,7 +17,12 @@ Másolható indítóüzenet:
 > Feature branch és PR módosítható, de ne merge-elj külön kérésem nélkül.
 > A Windows gépemen lévő jobs/video_job.json az authoritative runtime state:
 > branchváltás vagy reset előtt meg kell őrizni. A teszt- és futtatási parancsok
-> stdout/stderr kimenete UTF-8 logfájlba kerüljön. A következő feladat: …
+> stdout/stderr kimenete UTF-8 logfájlba kerüljön.
+> Kézi fázistesztet végzünk. A legutóbbi igazolt job: 20260922-095059,
+> The City Beneath the Moon. A narráció és globális időzítés kész, összesen
+> 29,60 s; a globálisan átírt narrációk végső elfogadása még nincs visszaigazolva.
+> Innen folytassuk: elfogadás után 5. fázis, vizuális promptok generálása.
+> Ne indítsd el automatikusan a teljes pipeline-t.
 
 ## Repo, környezet és munkaszabályok
 
@@ -170,7 +177,164 @@ Siker: `OK`, `Exit code: 0`. Az `... ok` egyetlen tesztnél nem bizonyítja a te
 futás sikerét. A `*>` / `Out-File` vegyes kódolásait kerüld; UTF-8-at használj.
 Részletek: [test/README.md](../test/README.md).
 
-## Legutóbbi ismert helyi E2E
+
+## Aktuális kézi fázisteszt — innen folytatjuk
+
+A felhasználó célja az egyes fázisok önálló futtatása, a kézi beavatkozás,
+a jelenetenkénti újragenerálás és a retry/fallback működésének kipróbálása.
+Fázisonként nevezzük meg, mi történik, adjunk UTF-8 logoló PowerShell-parancsot,
+és a feltöltött logból ellenőrizzük az eredményt. Ez nem teljesen automatikus
+E2E futás; ne ugorjunk át jóváhagyott lépéseken.
+
+**Legutóbbi igazolt job:** `20260922-095059`, **The City Beneath the Moon**.
+Ötlet: „Kommandósok megérkeznek egy idegen civilizációba. A holdsütötte városban
+mindenhol sötét árnyak vannak.”
+Karakterek: Captain Mara Voss, Tarin Holt, The Hollow Child.
+A bootstrap logja `Visual style: default` értéket mutat; a tényleges YAML-stílust,
+műfajt és a következő videógenerálás providerét a helyi jobból/környezetből kell
+ellenőrizni. Ne örökítsük rá a korábbi The Last Watch anime/still_motion beállítását.
+
+### Elvégzett fázisok és önálló belépési pontok
+
+Az alábbiak worker-parancsok; futtatáskor stdout és stderr is UTF-8 logba kerüljön.
+
+| Fázis | Worker | Igazolt eredmény |
+| --- | --- | --- |
+| 1. Ötletkidolgozás / bootstrap | `python -u src/new_job.py --idea "..."` | Új job, 3 karakter; korábbi `20260921-102547` job archiválva |
+| 2. Forgatókönyv | `python -u src/script_generator.py` | Első próbára 5 jelenet, 30 s tervezett hossz |
+| 3. Jelenetenkénti narráció, hang-QC, időzítés | `python -u src/voice_orchestrator.py --scene N --max-attempts 3` | Mind az 5 jelenet elkészült; 1–3. jelenetnél rövidítések |
+| 3/a. Egy jelenet automatikus rövidítése | `python -u src/script_timing_rewriter.py --scene N` | 2. jelenet: 1 kör; 3. jelenet: 2 kör |
+| 3/b. Új hang a rövidítés után | `python -u src/voice_orchestrator.py --scene N --max-attempts 3 --reset-attempts` | Új TTS, QC és mért időzítés |
+| 4. Összesített időzítés | `python -u src/scene_timing.py` | 5/5 jelenet PASS, de 41,65 s; globális rövidítés szükséges |
+| 4/a. Globális korrekció | `python -u src/script_duration_orchestrator.py --max-iterations 3` | 1 globális kör: 41,65 → 29,60 s; minden jelenet átírva és újramérve |
+| 5. Vizuális promptok | `python -u src/visual_prompt_generator.py` | Következő lépés; ehhez a jobhoz még nincs igazolt futás |
+
+A job, forgatókönyv, QC és időzítési állapot a Windows gép
+`jobs/video_job.json` fájljában van. A hangok:
+`output/20260922-095059/audio/voice/scene_001.wav` … `scene_005.wav`.
+A log nem helyettesíti a teljes JSON-t. A teljes aktuális JSON-t nem kaptuk meg.
+Kép-, videó-, zene-, felirat- és végső exporteredmény ehhez a jobhoz még nincs igazolva.
+
+### Időzítési eredmények
+
+TTS: `gpt-4o-mini-tts`, hang `marin`, természetes sebesség `1.0`;
+a vizsgált WAV-ok mono, 24 kHz PCM. Jelenetenként 0,30 s ráhagyás,
+10 s helyi jelenetkorlát. Ezeket a futásokban ellenőriztük, nem univerzális
+providerképességként állítjuk.
+
+| Jelenet | Globális korrekció előtt, ráhagyással | Utolsó mért hang | Utolsó jelenethossz |
+| --- | --- | --- | --- |
+| 1. | 4,85 s | 3,15 s | 3,45 s |
+| 2. | 9,35 s | 5,60 s | 5,90 s |
+| 3. | 9,00 s | 6,30 s | 6,60 s |
+| 4. | 9,80 s | 6,85 s | 7,15 s |
+| 5. | 8,65 s | 6,20 s | 6,50 s |
+| Összesen | 41,65 s | 28,10 s | **29,60 s** |
+
+A 29,60 s a jelenetidőzítések összege, nem kész videófájl mért hossza.
+Utolsó eredmény: `GLOBAL SCRIPT TIMING COMPLETE`,
+`Script revision recommended: False`, `Exit code: 0`.
+A rövidítő 35 s felső határt célzott; az új TTS tényleges eredménye lett 29,60 s.
+
+- 1. jelenet: eredetileg 5,65 s hang / 5,95 s jelenet. Kézi szövegcserével
+  4,55 / 4,85 s lett; ezt a felhasználó kifejezetten elfogadta.
+  A globális kör később ezt is átírta, tehát az elfogadás nem automatikusan
+  vonatkozik a legutolsó 3,45 s-os változatra.
+- 2. jelenet: 13,90 s hang → automatikus rövidítés után 9,05 s hang.
+- 3. jelenet: 15,10 s hang → első rövidítés 9,75 s hang + 0,30 s = 10,05 s,
+  ezért még FAIL → második rövidítés 8,70 s hang / 9,00 s jelenet, PASS.
+- A 4–5. jelenet elkészültét a felhasználó jelezte; időzítésüket a teljes
+  összesítő log igazolta. Külön eredeti generálási logjukat nem kaptuk meg.
+
+### Legutolsó, globálisan rövidített narrációk
+
+A `04-global-timing-20260922-145740.log` által igazolt szövegek:
+
+1. “Moonlit shadows turned toward the commandos.”
+2. “Silent streets. A shadow reached for Tarin—a child trapped inside.”
+3. “Cursed cityfolk, not monsters. The seal could free them—or unleash shadows.”
+4. “Mara sent them running, cut the curse in the seal with her blood. Warm light restored them.”
+5. “City lived. No shadows beneath them. Four shadows walked away. Would you stay?”
+
+**Nyitott elfogadás:** a globális kör utáni hangok meghallgatását és a fenti
+szövegek tartalmi elfogadását a felhasználó még nem igazolta vissza.
+A technikai QC nem bizonyítja a természetes megfogalmazást vagy a jelentésmegőrzést.
+A 3. jelenetből a helyi rövidítés során eltűnt a testekbe költöző árnyak konkrét
+veszélye; a globális körben a torony és a pecsét megtalálása is kiesett.
+Az 5. jelenet „City lived.” megfogalmazása távirati.
+Ezek észrevételek, nem automatikusan elvégzendő javítások.
+
+### A kézi teszt során feltárt működési korlátok
+
+- Nincs minden fázisra egységes „3 retry, majd fallback” garancia.
+  Bootstrap: nincs alkalmazásszintű tartalmi retry/fallback.
+  Forgatókönyv: maximum 3 generálási kísérlet validálási visszajelzéssel,
+  generálási kivételnél leáll, nincs fallback. A 3 kísérlet nem 3 további retry.
+- A voice orchestrator megőrzi a próbálkozásszámot; `--reset-attempts`
+  ezt nullázza, nem általános újragenerálási kapcsoló.
+  Túl hosszú szövegnél az önálló worker rövidítést kérve megáll.
+  A fő pipeline hívja a helyi rövidítőt és indít új mérési kört.
+- A helyi rövidítőnek nincs tetszőleges célidőt fogadó CLI-paramétere;
+  a mentett timing maximumából számol. A 10 s korlát, 0,30 s ráhagyás és
+  0,35 s biztonsági tartalék mellett a narrációs cél 9,35 s volt.
+- A `scene_editor.py` létező script- ÉS visual-jelenetet követel meg,
+  ezért a vizuális promptok előtti kézi narrációszerkesztésre jelenleg nem alkalmas.
+  Az 1. jelenetnél mentés után közvetlen JSON-szövegcserét, az összesített
+  `script.voiceover` frissítését, a jelenet `voice`/`timing` és a
+  `timing_summary` törlését használtuk, majd új voice/timing futást.
+  Ez a korai fázisra szabott megoldás, nem későbbi médiákhoz általános recept.
+- A kezdeti script tervezett időtartama nem megbízható beszédhosszbecslés:
+  több jelenet jelentősen túlfutott. A rövidítések szó-/karakterkorlátja sem
+  garantálja a tényleges TTS-hosszt; ezért szükséges az újramérés.
+- Az ismételt rövidítés tartalmi részleteket veszíthet. Nincs a bemutatott
+  technikai PASS-szal igazolt automatikus jelentésmegőrzési ellenőrzés.
+- A `scene_timing.py` 0-s kilépése önmagában nem bizonyítja, hogy a teljes videó
+  belefér a tartományba: 41,65 s-nál is 0 volt, globális revíziós jelzéssel.
+- A globális kör mind az öt jelenetet módosította, a korábban elfogadott elsőt is.
+  Ez nem jelenetenkénti felhasználói jóváhagyást megőrző zárolási rendszer.
+
+### Mentések, bizonyítékok és következő lépés
+
+A kiadott helyi parancsok JSON- és WAV-mentést készítettek a rövidítések előtt:
+`jobs/history/before-scene-001-shortening-<stamp>/`,
+`jobs/history/before-scene-00N-rewrite-<stamp>.json` és
+`scene_00N-before-<stamp>.wav`, illetve globális korrekció előtt
+`jobs/history/before-global-timing-<stamp>/video_job.json` és `voice/`.
+A mentések jelenlegi meglétét külön nem ellenőriztük. Ezek a repón belüli mentések
+nem helyettesítik a branchváltás/reset előtti repón kívüli mentést.
+
+Fő vizsgált logok (2026-09-22):
+`01-new-job-20260922-115041.log`,
+`02-script-20260922-120410.log`,
+`03-voice-scene-001-shortened-20260922-122611.log`,
+`03-voice-scene-002-rewrite-20260922-123331.log`,
+`03-voice-scene-003-rewrite-20260922-123812.log` (még FAIL),
+`03-voice-scene-003-rewrite-20260922-124038.log` (PASS),
+`04-total-timing-20260922-130543.log`,
+`04-global-timing-20260922-145740.log`.
+A feltöltött logokat elolvastuk; a hangfájlokat nem hallgattuk meg.
+
+Folytatás: az aktuális helyi job és a globális narrációk elfogadásának tisztázása
+után **5. fázis, vizuális promptok generálása**. Új PowerShellben először
+`. .\\enter-dev.ps1`, majd a projekt gyökeréből:
+
+```powershell
+New-Item -ItemType Directory -Force .\\logs | Out-Null
+$env:PYTHONIOENCODING = 'utf-8'
+$env:PYTHONUTF8 = '1'
+$log = ".\\logs\\05-visual-prompts-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
+cmd.exe /d /c ('python -u src\\visual_prompt_generator.py > "{0}" 2>&1' -f $log)
+$runExitCode = $LASTEXITCODE
+"Exit code: $runExitCode" | Out-File $log -Append -Encoding utf8
+Get-Content $log -Encoding utf8
+```
+
+Ez promptokat készít; önmagában még nem generál jelenetképeket vagy videókat.
+Az eredmény a job `visuals` részébe kerül. Egy jelenet célzására `--scene N`,
+újragenerálásra `--force`, meglévő visual-jelenet mozgáspromptjához
+`--scene N --motion-only` is elérhető; használat előtt a meglévő állapotot ellenőrizd.
+
+## Korábbi teljes helyi E2E — The Last Watch
 
 **The Last Watch**, job `20260921-102547`, 2026-09-21:
 
@@ -194,16 +358,18 @@ alapján kell ellenőrizni. Az assistant workspace repo-jobja nem bizonyíték r
 
 ## GitHub-állapot és következő lehetséges feladatok
 
-2026-09-22-én ellenőrizve, e dokumentum PR-jének megnyitása előtt:
+2026-09-27-én ellenőrizve, e frissítés PR-jének megnyitása előtt:
+
+- `main`: `6415ac8`; #22 (az első projektátadó) merge-elve.
+- Nincs nyitott PR. A távoli branchlista: `main`, `feature/multi-job-isolation-reuse`.
 
 - #21 merge-elve: műfaj, snapshot, jelenetszerkesztés, zene/narráció/SFX hangerő.
 - #19 merge-elve: tesztek külön `test/` könyvtárban.
 - #20 korábbi, csak műfajdokumentációs javaslatát #21 tartalmilag kiváltotta.
   Nem kell külön merge-elni. A nyitott PR-keresés nem adott találatot.
-- `fix/local-ltx-prompt-budget`: a korábbi összehasonlítás szerint nincs a
-  mainből hiányzó commitja, törölhető volt; törlését nem igazoltuk vissza.
-- `feature/multi-job-isolation-reuse`: mainhez képest 1 saját commit, 93 commit
-  lemaradás. A külön commit egy 214 soros `src/job_context.py` fájlt ad hozzá.
+- `fix/local-ltx-prompt-budget`: a mostani távoli branchlistában már nem szerepel.
+- `feature/multi-job-isolation-reuse`: a szeptember 22-i, #22 előtti összehasonlítás
+  szerint 1 saját commit, 93 commit lemaradás; ez nem a mai ahead/behind érték. A külön commit egy 214 soros `src/job_context.py` fájlt ad hozzá.
   Megőrzendő az érdemi összehasonlításig; nincs igazolt kész több-jobos integráció.
 
 Nyitott minőségi észrevételek, még nem implementált javításként kezelendők:
