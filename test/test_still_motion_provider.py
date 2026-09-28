@@ -76,7 +76,8 @@ class StillMotionTests(unittest.TestCase):
             self.assertTrue(output.with_suffix(".still-motion.log").exists())
 
     @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "FFmpeg required")
-    def test_real_render_through_shared_generator_and_cache(self):
+    @patch("video_semantic_qc.contract_text", return_value="Approved visible-subject contract")
+    def test_real_render_through_shared_generator_and_cache(self, approved_contract):
         from PIL import Image
         for mode in ("zoom", "hold"):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:

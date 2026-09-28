@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from visual_styles import style_instruction
+from visual_supervisor import require_approval, contract_text, reference_text
 
 from pathlib import Path
 import argparse
@@ -254,134 +255,19 @@ def build_scene_prompt(
     character_references: list[tuple[dict, Path]],
 ) -> str:
 
-    image_prompt = scene.get(
-        "image_prompt",
-        "",
-    )
+    approved = contract_text(job, scene)
+    mapping = '\n'.join(f"Reference {i}: {c['character_id']} ({c.get('name', '')})"
+                        for i, (c, _) in enumerate(character_references, 1))
+    feedback = scene.get('image', {}).get('semantic_qc', {})
+    correction = ''
+    if feedback.get('status') == 'failed':
+        correction = ('\nPrevious QC observations (repair only deviations from the approved '
+                      'contract; never add new requirements):\n' +
+                      str(feedback.get('overall_notes', ''))[:3000])
+    return ('Generate one scene image using this approved contract. Reference images '
+            'define identity, not framing.\n' + approved + '\n' + mapping +
+            '\n' + style_instruction(job) + correction)
 
-    negative_prompt = scene.get(
-        "negative_prompt",
-        "",
-    )
-
-    continuity_notes = scene.get(
-        "continuity_notes",
-        "",
-    )
-
-    global_prompt = job.get(
-        "visuals",
-        {},
-    ).get(
-        "global_prompt",
-        "",
-    )
-
-    style = job.get(
-        "style",
-        {},
-    )
-
-    # -----------------------------------------------------
-    # Reference mapping
-    # -----------------------------------------------------
-
-    reference_description = []
-
-    for index, (
-        character,
-        _,
-    ) in enumerate(
-        character_references,
-        start=1,
-    ):
-
-        reference = character.get(
-            "reference",
-            {},
-        )
-
-        signature = reference.get(
-            "visual_signature",
-            "",
-        )
-
-        reference_description.append(
-            f"""
-REFERENCE IMAGE {index}:
-Character ID: {character["character_id"]}
-Name: {character.get("name", "")}
-Visual identity: {signature}
-
-Preserve this character's visual identity closely.
-""".strip()
-        )
-
-    reference_text = "\n\n".join(
-        reference_description
-    )
-
-    style_text = json.dumps(
-        style,
-        ensure_ascii=False,
-    )
-
-    prompt = f"""
-Create a single vertical 9:16 frame for a short-form video.
-
-SCENE ID:
-{scene["scene_id"]}
-
-SCENE DESCRIPTION:
-{image_prompt}
-
-GLOBAL VISUAL STYLE:
-{global_prompt}
-
-JOB STYLE:
-{style_text}
-{style_instruction(job)}
-
-CHARACTER REFERENCES:
-
-{reference_text}
-
-CONTINUITY REQUIREMENTS:
-{continuity_notes}
-
-IMPORTANT CHARACTER RULES:
-
-- The supplied reference images define the identity and appearance
-  of the characters.
-- Preserve facial features, species, fur, hair, clothing, colors,
-  accessories and overall identity.
-- Do not merge character identities.
-- Do not swap clothing between characters.
-- Do not invent additional main characters.
-- Characters must remain recognizable as the same characters
-  shown in their reference images.
-
-COMPOSITION RULES:
-
-- Vertical 9:16 composition.
-- Designed for viewing on a mobile phone.
-- Main subjects must be immediately readable.
-- Keep important subjects away from the extreme top and bottom,
-  where social media UI may cover them.
-- Use one clearly readable visual idea.
-- Do not generate subtitles or captions.
-- Do not generate watermarks.
-- Do not generate logos unless explicitly required.
-- Do not render the later text_overlay into the image.
-
-AVOID:
-
-{negative_prompt}
-
-Generate only the scene image.
-""".strip()
-
-    return prompt
 
 # ---------------------------------------------------------
 # BUILD FINAL CHARACTER PROMPT
@@ -392,77 +278,7 @@ def build_character_prompt(
     job: dict,
 ) -> str:
 
-    reference = character["reference"]
-
-    positive_prompt = reference["prompt"]
-    negative_prompt = reference.get(
-        "negative_prompt",
-        "",
-    )
-
-    visual_signature = reference.get(
-        "visual_signature",
-        "",
-    )
-
-    job_style = job.get(
-        "style",
-        {},
-    )
-
-    style_text = json.dumps(
-        job_style,
-        ensure_ascii=False,
-    )
-
-    prompt = f"""
-Create a canonical reusable character reference image.
-
-CHARACTER ID:
-{character["character_id"]}
-
-CHARACTER NAME:
-{character.get("name", "")}
-
-VISUAL SIGNATURE:
-{visual_signature}
-
-REFERENCE DESCRIPTION:
-{positive_prompt}
-
-GLOBAL VISUAL STYLE:
-{style_text}
-{style_instruction(job)}
-
-REFERENCE IMAGE REQUIREMENTS:
-
-- Show exactly one character.
-- Full body or near-full-body view.
-- Three-quarter standing pose.
-- Neutral simple background.
-- Clean studio-style lighting.
-- Character clearly separated from the background.
-- Entire identity-defining clothing and accessories visible.
-- Neutral or characteristic resting facial expression.
-- No dramatic action.
-- No other characters.
-- No captions.
-- No subtitles.
-- No logos.
-- No watermark.
-- No UI elements.
-- This image will be reused as a visual identity reference
-  in later AI-generated scenes.
-
-AVOID:
-
-{negative_prompt}
-
-The result must prioritize clear, reproducible character identity
-over artistic complexity.
-""".strip()
-
-    return prompt
+    return reference_text(job, character) + '\n' + style_instruction(job)
 
 
 # ---------------------------------------------------------
@@ -474,8 +290,10 @@ def generate_image(
     prompt: str,
     output_file: Path,
     size: str,
+    *, job: dict,
 ) -> None:
 
+    require_approval(job)
     result = client.images.generate(
         model=IMAGE_MODEL,
         prompt=prompt,
@@ -565,6 +383,8 @@ def generate_character_reference(
     force: bool,
 ) -> bool:
 
+    require_approval(job)
+
     character_id = character[
         "character_id"
     ]
@@ -600,6 +420,7 @@ def generate_character_reference(
     if (
         output_file.exists()
         and not force
+        and reference.get("supervisor_hash") == job["visual_supervisor"]["plan_hash"]
     ):
 
         print(
@@ -654,6 +475,7 @@ def generate_character_reference(
         prompt=prompt,
         output_file=output_file,
         size=CHARACTER_REFERENCE_SIZE,
+        job=job,
     )
 
     # -----------------------------------------------------
@@ -688,6 +510,7 @@ def generate_character_reference(
         "/",
     )
 
+    reference["supervisor_hash"] = job["visual_supervisor"]["plan_hash"]
     reference["status"] = "generated"
     reference["image_file"] = relative_path
     reference["model"] = IMAGE_MODEL
@@ -888,8 +711,10 @@ def generate_scene_image_with_references(
     prompt: str,
     reference_paths: list[Path],
     output_file: Path,
+    *, job: dict,
 ) -> None:
 
+    require_approval(job)
     with ExitStack() as stack:
 
         image_files = [
@@ -954,6 +779,8 @@ def generate_scene_image(
     force: bool,
 ) -> bool:
 
+    require_approval(job)
+
     scene_id = scene["scene_id"]
 
     output_file = get_scene_output_path(
@@ -968,6 +795,7 @@ def generate_scene_image(
     if (
         output_file.exists()
         and not force
+        and scene.get("image", {}).get("supervisor_hash") == job["visual_supervisor"]["plan_hash"]
     ):
 
         print(
@@ -1047,6 +875,7 @@ def generate_scene_image(
             prompt=prompt,
             reference_paths=reference_paths,
             output_file=output_file,
+            job=job,
         )
 
     else:
@@ -1056,6 +885,7 @@ def generate_scene_image(
             prompt=prompt,
             output_file=output_file,
             size=SCENE_IMAGE_SIZE,
+            job=job,
         )
 
     # -----------------------------------------------------
@@ -1092,6 +922,7 @@ def generate_scene_image(
     # -----------------------------------------------------
 
     scene["image"] = {
+        "supervisor_hash": job["visual_supervisor"]["plan_hash"],
         "status": "generated",
         "file": relative_path,
         "model": IMAGE_MODEL,
@@ -1358,6 +1189,12 @@ def main() -> int:
     # -----------------------------------------------------
     # CLIENT
     # -----------------------------------------------------
+
+    try:
+        require_approval(job)
+    except RuntimeError as exc:
+        print(str(exc))
+        return 1
 
     client = OpenAI()
 

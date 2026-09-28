@@ -67,7 +67,9 @@ class VisualStylesTests(unittest.TestCase):
         self.assertEqual(worker.call_args.args, ('new_job', 'new_job.py',
             ['--idea', 'A romance', '--visual-style', 'cinematic_realism']))
 
-    def test_image_requests_include_authoritative_style(self):
+    @patch("image_generator.contract_text", return_value="Approved scene contract")
+    @patch("image_generator.reference_text", return_value="Approved reference contract")
+    def test_image_requests_include_authoritative_style(self, reference_contract, scene_contract):
         job = {'style': styles.persist_style({}, styles.select_style({}, 'photorealistic'))}
         scene_prompt = image_generator.build_scene_prompt(job, {'scene_id': 1, 'image_prompt': 'A couple in a cafe'}, [])
         reference_prompt = image_generator.build_character_prompt(

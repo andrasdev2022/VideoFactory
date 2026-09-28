@@ -12,6 +12,7 @@ import sys
 
 from openai import OpenAI
 from pydantic import BaseModel, Field
+from visual_supervisor import contract_text, QC_RULES
 from validator import load_json
 from pipeline_status import set_legacy_status_from_stage
 from local_ltx_motion_policy import qc_motion_prompt
@@ -220,6 +221,11 @@ assessment, not an aesthetic quality score.
 
 Return only the required structured output.
 """.strip()
+SYSTEM_PROMPT += "\nAPPROVED CONTRACT RULES (take precedence for visibility):\n" + QC_RULES
+SYSTEM_PROMPT += ("\nWhen a trait is explicitly not required, do not fail identity, appearance "
+                  "or clothing for its absence. Assess visible traits only. Partial-body "
+                  "presence is presence; a listed character need not show their face.")
+
 
 
 # ---------------------------------------------------------
@@ -833,6 +839,7 @@ def build_context(
         )
 
     context = {
+        "approved_visual_contract": contract_text(job, scene),
         "scene_id":
             scene["scene_id"],
 
