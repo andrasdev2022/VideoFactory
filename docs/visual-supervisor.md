@@ -72,12 +72,26 @@ Hiba/refusal/hiányos válasz esetén a kapu zárva marad.
 
 ## Meglévő jobok és mentések
 
-Régi job nem kap automatikus felmentést. Első jóváhagyáskor, illetve új terv
-jóváhagyásakor a jelenlegi megvalósítás konzervatívan a **teljes vizuális
-médiaállapotot** érvényteleníti: karakterképek, jelenetképek, videók, ezek QC-je,
-vágás és a függő összeállítás/export. A képi és videós próbálkozásszámlálók
-nullázódnak. A narráció és annak időzítése megmarad. Az audioterv és a generált
-zene/SFX cache-e is érvénytelenedik, mert a vizuális terv változhatott.
+Korábbi jóváhagyás nélkül a meglévő vizuális média új ellenőrzést és generálást
+igényel. Újrajóváhagyáskor viszont a program jelenetenként és referenciánként
+hasonlítja össze a függőségeket. A változatlan, korábbi jóváhagyáshoz kötött
+képek, videók, QC-eredmények és próbálkozásszámlálók megmaradnak. Egy referencia
+változása csak az azt használó jeleneteket érinti. Kizárólag időzítésváltozásnál
+a kép megmarad, a videó újrakészül. Az érintett média és a függő összeállítás,
+felirat-/hangcache és export érvényét veszti. A narráció megmarad.
+
+A supervisor kizárólag vizuális követelményeket egyeztethet. A mért időzítés,
+CTA, feliratozás és export beállításai nem szerkeszthetők ezen a fázison belül.
+A régi folytonossági megjegyzésekből eltávolítja az ütemezési mondatokat; az
+eredeti szöveg az auditban megmarad. Az új terv külön ellenőrzést kap.
+
+Technikailag megfelelő, de tartalmi QC-n elbukott képnél a következő próbálkozás
+**a hibás képet küldi szerkesztési célként**, első képbemenetként. A karakterképek
+külön identitásreferenciák. A prompt a QC eltéréseinek javítását és a többi rész
+megőrzését kéri. Az eredeti kép és a javítás adatai előbb az adott képkönyvtár
+`history/` almappájába kerülnek. Hiányzó javítási forrásnál a folyamat leáll.
+A szerkesztés nem garantál változatlan pixeleket a többi területen, ezért a
+javított kép ismét teljes QC-t kap.
 
 A meglévő médiafájlokat a supervisor nem törli, de a későbbi generátorok
 felülírhatják őket. Folytatás előtt mentsd külön az `output/<job_id>` könyvtárat,
@@ -92,3 +106,22 @@ után a konkrét konfliktust kell javítani; a `status` kézi átírása nem meg
 
 A fázis a vizuális tervezést és a kép-/videó-QC követelményeit egyezteti.
 Nem helyettesít külön hangminőségi vagy audioterv-supervisort.
+
+## Az elakadt 5. jelenet folytatása
+
+A frissített kóddal először futtasd a fenti önálló supervisort. Csak sikeres
+jóváhagyás (0 kilépési kód) után indítsd a jelenetet. Ez kizárólag az 5. jelenet
+próbálkozási keretét nyitja újra:
+
+```powershell
+$log = ".\logs\scene5-repair-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
+python -u .\src\scene_orchestrator.py --scene 5 --reset-attempts 2>&1 |
+    Out-File $log -Encoding utf8
+$runExitCode = $LASTEXITCODE
+"Exit code: $runExitCode" | Out-File $log -Encoding utf8 -Append
+Get-Content $log -Encoding utf8 -Tail 30
+```
+
+Sikeres jelenet-QC után a master `--idea` nélkül folytatható a megszokott
+naplózással. A supervisor által ténylegesen módosított jelenetek új médiát
+igényelhetnek; a változatlan 1–4. jelenet megmarad.

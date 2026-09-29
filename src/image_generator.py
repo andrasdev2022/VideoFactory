@@ -9,6 +9,9 @@ import base64
 import copy
 import json
 import os
+import hashlib
+import shutil
+from datetime import datetime, timezone
 import sys
 
 from openai import OpenAI
@@ -253,18 +256,24 @@ def build_scene_prompt(
     job: dict,
     scene: dict,
     character_references: list[tuple[dict, Path]],
+    *, repair: bool = False,
 ) -> str:
 
     approved = contract_text(job, scene)
     mapping = '\n'.join(f"Reference {i}: {c['character_id']} ({c.get('name', '')})"
-                        for i, (c, _) in enumerate(character_references, 1))
-    feedback = scene.get('image', {}).get('semantic_qc', {})
+                        for i, (c, _) in enumerate(character_references, 2 if repair else 1))
+    feedback = repair_metadata(scene).get('semantic_qc', {})
     correction = ''
     if feedback.get('status') == 'failed':
         correction = ('\nPrevious QC observations (repair only deviations from the approved '
                       'contract; never add new requirements):\n' +
                       str(feedback.get('overall_notes', ''))[:3000])
-    return ('Generate one scene image using this approved contract. Reference images '
+    action = ('Edit IMAGE 1, the failed scene image. Correct ONLY the deviations described '
+              'by QC against the approved contract. Preserve the composition, lighting, '
+              'identities and all already-correct objects. Remaining images are identity '
+              'references, NOT edit targets. Do not recreate the whole scene from them.\n'
+              if repair else '')
+    return (action + 'Generate one scene image using this approved contract. Reference images '
             'define identity, not framing.\n' + approved + '\n' + mapping +
             '\n' + style_instruction(job) + correction)
 
@@ -711,17 +720,18 @@ def generate_scene_image_with_references(
     prompt: str,
     reference_paths: list[Path],
     output_file: Path,
-    *, job: dict,
+    *, job: dict, repair_source: Path | None = None,
 ) -> None:
 
     require_approval(job)
+    input_paths = ([repair_source] if repair_source is not None else []) + reference_paths
     with ExitStack() as stack:
 
         image_files = [
             stack.enter_context(
                 path.open("rb")
             )
-            for path in reference_paths
+            for path in input_paths
         ]
 
         result = client.images.edit(
@@ -751,6 +761,9 @@ def generate_scene_image_with_references(
         image_base64
     )
 
+    if not image_bytes:
+        raise RuntimeError("Image edit returned empty image data.")
+
     output_file.parent.mkdir(
         parents=True,
         exist_ok=True,
@@ -771,6 +784,41 @@ def generate_scene_image_with_references(
     temp_file.replace(
         output_file
     )
+
+def repair_metadata(scene):
+    current = scene.get('image', {})
+    if current:
+        return current if current.get('semantic_qc', {}).get('status') == 'failed' else {}
+    return scene.get('image_repair_source', {})
+
+
+def archive_repair_source(scene, output_file, prompt):
+    metadata = repair_metadata(scene)
+    if not metadata:
+        return None, None
+    if metadata.get('qc', {}).get('status') != 'passed':
+        return None, None  # corrupt/technically invalid images need a fresh generation
+    name = metadata.get('file')
+    if not name:
+        raise RuntimeError('Failed scene has no edit-source filename; refusing blind regeneration.')
+    source_path = PROJECT_ROOT / name
+    if not source_path.is_file():
+        raise RuntimeError(f'Failed scene edit source missing: {source_path}')
+    source_hash = hashlib.sha256(source_path.read_bytes()).hexdigest()
+    stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
+    folder = output_file.parent / 'history'
+    folder.mkdir(parents=True, exist_ok=True)
+    archive = folder / f'{output_file.stem}-before-repair-{stamp}{source_path.suffix}'
+    shutil.copy2(source_path, archive)
+    audit = {'mode': 'targeted_edit', 'source_file': name, 'source_sha256': source_hash,
+             'backup_file': archive.relative_to(PROJECT_ROOT).as_posix(),
+             'qc': metadata.get('semantic_qc'), 'prompt': prompt,
+             'created_at': datetime.now(timezone.utc).isoformat()}
+    audit_file = archive.with_suffix('.json')
+    audit_file.write_text(json.dumps(audit, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    print(f'  Targeted image repair; original preserved: {archive}')
+    return archive, audit
+
 
 def generate_scene_image(
     client: OpenAI,
@@ -795,6 +843,7 @@ def generate_scene_image(
     if (
         output_file.exists()
         and not force
+        and not repair_metadata(scene)
         and scene.get("image", {}).get("supervisor_hash") == job["visual_supervisor"]["plan_hash"]
     ):
 
@@ -835,7 +884,9 @@ def generate_scene_image(
         job,
         scene,
         character_references,
+        repair=bool(repair_metadata(scene).get("qc", {}).get("status") == "passed"),
     )
+    repair_source, repair_audit = archive_repair_source(scene, output_file, prompt)
 
     print(
         f"\nGenerating scene {scene_id}"
@@ -862,7 +913,7 @@ def generate_scene_image(
     # Generate
     # -----------------------------------------------------
 
-    if character_references:
+    if character_references or repair_source is not None:
 
         reference_paths = [
             path
@@ -874,6 +925,7 @@ def generate_scene_image(
             client=client,
             prompt=prompt,
             reference_paths=reference_paths,
+            repair_source=repair_source,
             output_file=output_file,
             job=job,
         )
@@ -921,7 +973,9 @@ def generate_scene_image(
     # Job state
     # -----------------------------------------------------
 
+    scene.pop("image_repair_source", None)
     scene["image"] = {
+        "repair": repair_audit,
         "supervisor_hash": job["visual_supervisor"]["plan_hash"],
         "status": "generated",
         "file": relative_path,
