@@ -40,7 +40,7 @@ def motion_prompt(config):
         return "Static hold of the approved image. No character, object or camera motion."
     return (f"One continuous, slow centered camera push-in from 1.0x to {config.max_zoom:g}x. "
             "Only the image framing changes. Characters, faces, clothing and props remain "
-            "unchanged with no independent movement. Keep all main faces visible.")
+            "unchanged with no independent movement. Keep the approved visible subjects and important details within frame.")
 
 
 def build_command(image, output, duration, config):

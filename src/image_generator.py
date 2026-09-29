@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from visual_styles import style_instruction
+from visual_supervisor import require_approval, contract_text, reference_text
 
 from pathlib import Path
 import argparse
@@ -8,6 +9,9 @@ import base64
 import copy
 import json
 import os
+import hashlib
+import shutil
+from datetime import datetime, timezone
 import sys
 
 from openai import OpenAI
@@ -252,136 +256,27 @@ def build_scene_prompt(
     job: dict,
     scene: dict,
     character_references: list[tuple[dict, Path]],
+    *, repair: bool = False,
 ) -> str:
 
-    image_prompt = scene.get(
-        "image_prompt",
-        "",
-    )
+    approved = contract_text(job, scene)
+    mapping = '\n'.join(f"Reference {i}: {c['character_id']} ({c.get('name', '')})"
+                        for i, (c, _) in enumerate(character_references, 2 if repair else 1))
+    feedback = repair_metadata(scene).get('semantic_qc', {})
+    correction = ''
+    if feedback.get('status') == 'failed':
+        correction = ('\nPrevious QC observations (repair only deviations from the approved '
+                      'contract; never add new requirements):\n' +
+                      str(feedback.get('overall_notes', ''))[:3000])
+    action = ('Edit IMAGE 1, the failed scene image. Correct ONLY the deviations described '
+              'by QC against the approved contract. Preserve the composition, lighting, '
+              'identities and all already-correct objects. Remaining images are identity '
+              'references, NOT edit targets. Do not recreate the whole scene from them.\n'
+              if repair else '')
+    return (action + 'Generate one scene image using this approved contract. Reference images '
+            'define identity, not framing.\n' + approved + '\n' + mapping +
+            '\n' + style_instruction(job) + correction)
 
-    negative_prompt = scene.get(
-        "negative_prompt",
-        "",
-    )
-
-    continuity_notes = scene.get(
-        "continuity_notes",
-        "",
-    )
-
-    global_prompt = job.get(
-        "visuals",
-        {},
-    ).get(
-        "global_prompt",
-        "",
-    )
-
-    style = job.get(
-        "style",
-        {},
-    )
-
-    # -----------------------------------------------------
-    # Reference mapping
-    # -----------------------------------------------------
-
-    reference_description = []
-
-    for index, (
-        character,
-        _,
-    ) in enumerate(
-        character_references,
-        start=1,
-    ):
-
-        reference = character.get(
-            "reference",
-            {},
-        )
-
-        signature = reference.get(
-            "visual_signature",
-            "",
-        )
-
-        reference_description.append(
-            f"""
-REFERENCE IMAGE {index}:
-Character ID: {character["character_id"]}
-Name: {character.get("name", "")}
-Visual identity: {signature}
-
-Preserve this character's visual identity closely.
-""".strip()
-        )
-
-    reference_text = "\n\n".join(
-        reference_description
-    )
-
-    style_text = json.dumps(
-        style,
-        ensure_ascii=False,
-    )
-
-    prompt = f"""
-Create a single vertical 9:16 frame for a short-form video.
-
-SCENE ID:
-{scene["scene_id"]}
-
-SCENE DESCRIPTION:
-{image_prompt}
-
-GLOBAL VISUAL STYLE:
-{global_prompt}
-
-JOB STYLE:
-{style_text}
-{style_instruction(job)}
-
-CHARACTER REFERENCES:
-
-{reference_text}
-
-CONTINUITY REQUIREMENTS:
-{continuity_notes}
-
-IMPORTANT CHARACTER RULES:
-
-- The supplied reference images define the identity and appearance
-  of the characters.
-- Preserve facial features, species, fur, hair, clothing, colors,
-  accessories and overall identity.
-- Do not merge character identities.
-- Do not swap clothing between characters.
-- Do not invent additional main characters.
-- Characters must remain recognizable as the same characters
-  shown in their reference images.
-
-COMPOSITION RULES:
-
-- Vertical 9:16 composition.
-- Designed for viewing on a mobile phone.
-- Main subjects must be immediately readable.
-- Keep important subjects away from the extreme top and bottom,
-  where social media UI may cover them.
-- Use one clearly readable visual idea.
-- Do not generate subtitles or captions.
-- Do not generate watermarks.
-- Do not generate logos unless explicitly required.
-- Do not render the later text_overlay into the image.
-
-AVOID:
-
-{negative_prompt}
-
-Generate only the scene image.
-""".strip()
-
-    return prompt
 
 # ---------------------------------------------------------
 # BUILD FINAL CHARACTER PROMPT
@@ -392,77 +287,7 @@ def build_character_prompt(
     job: dict,
 ) -> str:
 
-    reference = character["reference"]
-
-    positive_prompt = reference["prompt"]
-    negative_prompt = reference.get(
-        "negative_prompt",
-        "",
-    )
-
-    visual_signature = reference.get(
-        "visual_signature",
-        "",
-    )
-
-    job_style = job.get(
-        "style",
-        {},
-    )
-
-    style_text = json.dumps(
-        job_style,
-        ensure_ascii=False,
-    )
-
-    prompt = f"""
-Create a canonical reusable character reference image.
-
-CHARACTER ID:
-{character["character_id"]}
-
-CHARACTER NAME:
-{character.get("name", "")}
-
-VISUAL SIGNATURE:
-{visual_signature}
-
-REFERENCE DESCRIPTION:
-{positive_prompt}
-
-GLOBAL VISUAL STYLE:
-{style_text}
-{style_instruction(job)}
-
-REFERENCE IMAGE REQUIREMENTS:
-
-- Show exactly one character.
-- Full body or near-full-body view.
-- Three-quarter standing pose.
-- Neutral simple background.
-- Clean studio-style lighting.
-- Character clearly separated from the background.
-- Entire identity-defining clothing and accessories visible.
-- Neutral or characteristic resting facial expression.
-- No dramatic action.
-- No other characters.
-- No captions.
-- No subtitles.
-- No logos.
-- No watermark.
-- No UI elements.
-- This image will be reused as a visual identity reference
-  in later AI-generated scenes.
-
-AVOID:
-
-{negative_prompt}
-
-The result must prioritize clear, reproducible character identity
-over artistic complexity.
-""".strip()
-
-    return prompt
+    return reference_text(job, character) + '\n' + style_instruction(job)
 
 
 # ---------------------------------------------------------
@@ -474,8 +299,10 @@ def generate_image(
     prompt: str,
     output_file: Path,
     size: str,
+    *, job: dict,
 ) -> None:
 
+    require_approval(job)
     result = client.images.generate(
         model=IMAGE_MODEL,
         prompt=prompt,
@@ -565,6 +392,8 @@ def generate_character_reference(
     force: bool,
 ) -> bool:
 
+    require_approval(job)
+
     character_id = character[
         "character_id"
     ]
@@ -600,6 +429,7 @@ def generate_character_reference(
     if (
         output_file.exists()
         and not force
+        and reference.get("supervisor_hash") == job["visual_supervisor"]["plan_hash"]
     ):
 
         print(
@@ -654,6 +484,7 @@ def generate_character_reference(
         prompt=prompt,
         output_file=output_file,
         size=CHARACTER_REFERENCE_SIZE,
+        job=job,
     )
 
     # -----------------------------------------------------
@@ -688,6 +519,7 @@ def generate_character_reference(
         "/",
     )
 
+    reference["supervisor_hash"] = job["visual_supervisor"]["plan_hash"]
     reference["status"] = "generated"
     reference["image_file"] = relative_path
     reference["model"] = IMAGE_MODEL
@@ -888,15 +720,18 @@ def generate_scene_image_with_references(
     prompt: str,
     reference_paths: list[Path],
     output_file: Path,
+    *, job: dict, repair_source: Path | None = None,
 ) -> None:
 
+    require_approval(job)
+    input_paths = ([repair_source] if repair_source is not None else []) + reference_paths
     with ExitStack() as stack:
 
         image_files = [
             stack.enter_context(
                 path.open("rb")
             )
-            for path in reference_paths
+            for path in input_paths
         ]
 
         result = client.images.edit(
@@ -926,6 +761,9 @@ def generate_scene_image_with_references(
         image_base64
     )
 
+    if not image_bytes:
+        raise RuntimeError("Image edit returned empty image data.")
+
     output_file.parent.mkdir(
         parents=True,
         exist_ok=True,
@@ -947,12 +785,49 @@ def generate_scene_image_with_references(
         output_file
     )
 
+def repair_metadata(scene):
+    current = scene.get('image', {})
+    if current:
+        return current if current.get('semantic_qc', {}).get('status') == 'failed' else {}
+    return scene.get('image_repair_source', {})
+
+
+def archive_repair_source(scene, output_file, prompt):
+    metadata = repair_metadata(scene)
+    if not metadata:
+        return None, None
+    if metadata.get('qc', {}).get('status') != 'passed':
+        return None, None  # corrupt/technically invalid images need a fresh generation
+    name = metadata.get('file')
+    if not name:
+        raise RuntimeError('Failed scene has no edit-source filename; refusing blind regeneration.')
+    source_path = PROJECT_ROOT / name
+    if not source_path.is_file():
+        raise RuntimeError(f'Failed scene edit source missing: {source_path}')
+    source_hash = hashlib.sha256(source_path.read_bytes()).hexdigest()
+    stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
+    folder = output_file.parent / 'history'
+    folder.mkdir(parents=True, exist_ok=True)
+    archive = folder / f'{output_file.stem}-before-repair-{stamp}{source_path.suffix}'
+    shutil.copy2(source_path, archive)
+    audit = {'mode': 'targeted_edit', 'source_file': name, 'source_sha256': source_hash,
+             'backup_file': archive.relative_to(PROJECT_ROOT).as_posix(),
+             'qc': metadata.get('semantic_qc'), 'prompt': prompt,
+             'created_at': datetime.now(timezone.utc).isoformat()}
+    audit_file = archive.with_suffix('.json')
+    audit_file.write_text(json.dumps(audit, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    print(f'  Targeted image repair; original preserved: {archive}')
+    return archive, audit
+
+
 def generate_scene_image(
     client: OpenAI,
     job: dict,
     scene: dict,
     force: bool,
 ) -> bool:
+
+    require_approval(job)
 
     scene_id = scene["scene_id"]
 
@@ -968,6 +843,8 @@ def generate_scene_image(
     if (
         output_file.exists()
         and not force
+        and not repair_metadata(scene)
+        and scene.get("image", {}).get("supervisor_hash") == job["visual_supervisor"]["plan_hash"]
     ):
 
         print(
@@ -1007,7 +884,9 @@ def generate_scene_image(
         job,
         scene,
         character_references,
+        repair=bool(repair_metadata(scene).get("qc", {}).get("status") == "passed"),
     )
+    repair_source, repair_audit = archive_repair_source(scene, output_file, prompt)
 
     print(
         f"\nGenerating scene {scene_id}"
@@ -1034,7 +913,7 @@ def generate_scene_image(
     # Generate
     # -----------------------------------------------------
 
-    if character_references:
+    if character_references or repair_source is not None:
 
         reference_paths = [
             path
@@ -1046,7 +925,9 @@ def generate_scene_image(
             client=client,
             prompt=prompt,
             reference_paths=reference_paths,
+            repair_source=repair_source,
             output_file=output_file,
+            job=job,
         )
 
     else:
@@ -1056,6 +937,7 @@ def generate_scene_image(
             prompt=prompt,
             output_file=output_file,
             size=SCENE_IMAGE_SIZE,
+            job=job,
         )
 
     # -----------------------------------------------------
@@ -1091,7 +973,10 @@ def generate_scene_image(
     # Job state
     # -----------------------------------------------------
 
+    scene.pop("image_repair_source", None)
     scene["image"] = {
+        "repair": repair_audit,
+        "supervisor_hash": job["visual_supervisor"]["plan_hash"],
         "status": "generated",
         "file": relative_path,
         "model": IMAGE_MODEL,
@@ -1358,6 +1243,12 @@ def main() -> int:
     # -----------------------------------------------------
     # CLIENT
     # -----------------------------------------------------
+
+    try:
+        require_approval(job)
+    except RuntimeError as exc:
+        print(str(exc))
+        return 1
 
     client = OpenAI()
 

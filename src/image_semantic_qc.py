@@ -11,6 +11,7 @@ import sys
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
+from visual_supervisor import contract_text, QC_RULES
 from validator import load_json
 
 
@@ -158,6 +159,11 @@ minor harmless stylistic differences.
 
 Return only the required structured result.
 """.strip()
+SYSTEM_PROMPT += "\nAPPROVED CONTRACT RULES (take precedence for visibility):\n" + QC_RULES
+SYSTEM_PROMPT += ("\nWhen a trait is explicitly not required, do not fail identity, appearance "
+                  "or clothing for its absence. Assess visible traits only. Partial-body "
+                  "presence is presence; a listed character need not show their face.")
+
 
 
 # ---------------------------------------------------------
@@ -473,6 +479,7 @@ def build_text_context(
         )
 
     context = {
+        "approved_visual_contract": contract_text(job, scene),
         "scene_id":
             scene["scene_id"],
 

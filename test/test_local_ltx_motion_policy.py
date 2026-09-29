@@ -80,7 +80,8 @@ class LocalLTXMotionPolicyTests(unittest.TestCase):
         self.assertIn("pushes the cart", prompt)
         self.assertIn("Follow the requested motion exactly.", prompt)
 
-    def test_generated_video_records_effective_plan_for_qc_and_next_seed(self):
+    @patch("video_semantic_qc.contract_text", return_value="Approved visible-subject contract")
+    def test_generated_video_records_effective_plan_for_qc_and_next_seed(self, approved_contract):
         job = make_job()
         scene = job["visuals"]["scenes"][0]
         with tempfile.TemporaryDirectory() as directory:

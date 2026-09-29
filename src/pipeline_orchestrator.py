@@ -39,6 +39,7 @@ STAGE_VOICE_TIMING = "voice_timing"
 STAGE_GLOBAL_TIMING = "global_timing"
 STAGE_VISUAL_PROMPTS = "visual_prompts"
 STAGE_CHARACTER_PROMPTS = "character_reference_prompts"
+STAGE_SUPERVISOR = "visual_supervisor"
 STAGE_CHARACTER_IMAGES = "character_references"
 STAGE_SCENES = "scene_generation"
 STAGE_ASSEMBLY = "base_assembly"
@@ -55,6 +56,7 @@ STAGE_ORDER = (
     STAGE_GLOBAL_TIMING,
     STAGE_VISUAL_PROMPTS,
     STAGE_CHARACTER_PROMPTS,
+    STAGE_SUPERVISOR,
     STAGE_CHARACTER_IMAGES,
     STAGE_SCENES,
     STAGE_ASSEMBLY,
@@ -1617,6 +1619,11 @@ def run_pipeline(
         STAGE_CHARACTER_PROMPTS,
         args.stop_after,
     ):
+        return
+
+    # Always execute the cheap freshness check, including resumed jobs.
+    run_worker(STAGE_SUPERVISOR, "visual_supervisor.py")
+    if should_stop_after(STAGE_SUPERVISOR, args.stop_after):
         return
 
     run_standard_stage(
