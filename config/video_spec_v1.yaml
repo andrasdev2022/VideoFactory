@@ -60,7 +60,6 @@ visual:
 audio:
   voiceover:
     required: true
-    gender: "any"
     style: "energetic"
     model: "gpt-4o-mini-tts"
     voice: "marin"

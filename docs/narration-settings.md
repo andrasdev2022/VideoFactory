@@ -7,7 +7,6 @@ A fő beállítások a `config/video_spec_v1.yaml` fájlban találhatók:
 audio:
   voiceover:
     required: true
-    gender: "any"
     model: "gpt-4o-mini-tts"
     voice: "marin"
     style: "warm, gentle and intimate storytelling"
@@ -29,7 +28,6 @@ audio:
 | `instructions` | Szabad szöveg, alap: üres | Kiegészítő előadói instrukciók: tónus, érzelem, akcentus, hangsúly, szünetek, suttogás. Nem felolvasandó szöveg. |
 | `speed` | Szám **0.25–4.0**, alap: **1.0** | 1.0 normál, 0.9 lassabb, 1.1 gyorsabb. A régi `"natural"` érték továbbra is 1.0-t jelent. Nem pontos videóhossz-előírás. |
 | `response_format` | `wav` (alap), `mp3`, `opus`, `aac`, `flac` | A jelenetenként mentett hang formátuma. A WAV egyszerű, tömörítetlen munkaforrás. |
-| `gender` | Meglévő kompatibilitási mező | Nem választ hangot; nincs ilyen külön Speech API-paraméter. A `voice` és a hangminták alapján válassz. |
 | `required` | Maradjon `true` | A jelenlegi pipeline narrációra és annak mért időzítésére épül. A narráció nélküli pipeline nincs ezzel a változtatással megvalósítva. |
 
 A nyelvet a `video.language` adja, például `en` vagy `hu`. A felolvasott szöveg
