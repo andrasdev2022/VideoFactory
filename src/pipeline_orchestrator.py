@@ -404,8 +404,16 @@ def all_scene_generation_completed() -> bool:
     )
 
 
+def narration_is_current(scene):
+    from genre_policy import runtime_spec
+    from voice_generator import voice_settings_match
+    return voice_settings_match(runtime_spec(PROJECT_ROOT / 'config/video_spec_v1.yaml'), scene)
+
+
 def all_voice_timing_completed() -> bool:
 
+    if any(not narration_is_current(s) for s in load_job().get('script', {}).get('scenes', [])):
+        return False
     status = current_pipeline_status()
 
     return all(
@@ -905,7 +913,8 @@ def run_voice_timing_for_scene(
         )
 
         if (
-            timing.get(
+            narration_is_current(scene)
+            and timing.get(
                 "status"
             )
             == "passed"

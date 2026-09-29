@@ -54,8 +54,10 @@ class MasterPipelineOrchestratorTests(
     @patch(
         "pipeline_orchestrator.current_pipeline_status"
     )
+    @patch("pipeline_orchestrator.load_job", return_value={"script": {"scenes": []}})
     def test_voice_timing_completion_requires_all_three_stages(
         self,
+        job_mock,
         status_mock,
     ):
 

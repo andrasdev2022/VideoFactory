@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tts_settings import resolve_tts_settings
+
 from sfx_policy import sound_effects_enabled
 
 from genre_policy import prepare_spec, genre_instruction, genre_name
@@ -430,6 +432,7 @@ def build_job(
     job_id: str,
 ) -> dict:
 
+    tts = resolve_tts_settings(spec)
     idea = output.idea.model_dump()
 
     idea.update(
@@ -587,6 +590,8 @@ def build_job(
 
         "audio": {
             "voiceover": {
+                **tts,
+                "instructions": spec.get("audio", {}).get("voiceover", {}).get("instructions", ""),
                 "required":
                     True,
 
@@ -603,7 +608,7 @@ def build_job(
                     spec.get("audio", {}).get("voiceover", {}).get("style", "natural storyteller"),
 
                 "speed":
-                    1.0,
+                    tts["speed"],
 
                 "audio_file":
                     None,
@@ -778,6 +783,7 @@ def main() -> int:
         )
 
         spec = prepare_spec(select_style(spec, args.visual_style))
+        resolve_tts_settings(spec)
         print(f"Visual style: {args.visual_style or 'default'}")
 
         client = OpenAI()
