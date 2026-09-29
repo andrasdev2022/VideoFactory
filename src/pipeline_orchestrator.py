@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sfx_policy import synchronize_sfx_policy
+
 from visual_styles import CHOICES
 
 import argparse
@@ -194,9 +196,10 @@ def save_job_atomic(
 
 
 def load_job() -> dict:
-    return load_json(
-        JOB_FILE
-    )
+    job = load_json(JOB_FILE)
+    if synchronize_sfx_policy(job):
+        save_job_atomic(job)
+    return job
 
 
 def master_state(

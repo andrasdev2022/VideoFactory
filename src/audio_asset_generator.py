@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sfx_policy import sound_effects_enabled, synchronize_sfx_policy
+
 from genre_policy import genre_instruction
 
 import argparse
@@ -1381,10 +1383,7 @@ def generate_sfx(
         {},
     )
 
-    if not sound_effects.get(
-        "enabled",
-        False,
-    ):
+    if not sound_effects_enabled(job):
 
         return (
             0,
@@ -1703,17 +1702,8 @@ def main() -> int:
             )
         )
 
-        effects_enabled = bool(
-            audio
-            .get(
-                "sound_effects",
-                {},
-            )
-            .get(
-                "enabled",
-                False,
-            )
-        )
+        synchronize_sfx_policy(job)
+        effects_enabled = sound_effects_enabled(job)
 
         need_music = (
             not args.sfx_only
@@ -1730,9 +1720,13 @@ def main() -> int:
             or need_sfx
         ):
 
-            raise RuntimeError(
-                "No audio assets are enabled for generation."
-            )
+            if not music_required and not any(s.get('music_override') for s in job.get('visuals', {}).get('scenes', [])) and not effects_enabled:
+                audio['assets'] = {'status': 'passed', 'sfx_generated_this_run': 0,
+                                   'warnings': [], 'errors': []}
+                set_legacy_status_from_stage(job, 'audio_assets')
+            save_job_atomic(job)
+            print('No requested audio assets enabled; skipped without API calls.')
+            return 0
 
         api_key = get_api_key()
 

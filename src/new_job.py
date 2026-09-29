@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sfx_policy import sound_effects_enabled
+
 from genre_policy import prepare_spec, genre_instruction, genre_name
 from visual_styles import CHOICES, select_style, persist_style
 
@@ -626,7 +628,7 @@ def build_job(
 
             "sound_effects": {
                 "enabled":
-                    True,
+                    sound_effects_enabled({}, spec=spec),
 
                 "effects":
                     [],

@@ -60,3 +60,34 @@ Remove-Item Env:FINAL_MIX_VOICE_VOLUME -ErrorAction SilentlyContinue
 Remove-Item Env:FINAL_MIX_SFX_VOLUME -ErrorAction SilentlyContinue
 Remove-Item Env:FINAL_MIX_DUCK_RATIO -ErrorAction SilentlyContinue
 ```
+
+## SFX teljes kikapcsolása
+
+A `config/video_spec_v1.yaml` fájlban:
+
+```yaml
+audio:
+  sound_effects:
+    enabled: false
+```
+
+Ez tiltja az SFX tervezését, generálását (a `--force` sem írja felül), és a már
+elkészült effektfájlok bekeverését. A háttérzene, jelenetzene és narráció megmarad.
+Az SFX-generálás kihagyása nem fogyaszt ElevenLabs SFX-kreditet; a zenegenerálás
+ettől még futhat. A költségbecslés sem számol letiltott effektekkel.
+
+Az aktuális YAML `false` értéke **meglévő job folytatásakor is tiltás**, akkor is,
+ha a job korábbi snapshotja vagy audioterve még engedélyezte az SFX-et. Ez az
+SFX-kapcsoló szándékos kivétele a többi konfiguráció snapshot-szabályának.
+A mentett snapshot vagy job kifejezett `false` értékét a YAML `true` nem írja
+felül. Új jobnál a YAML aktuális értéke kerül a mentett állapotba.
+
+A master a változás után újraértékeli a hanganyagfázist és újrakeveri a hangot,
+majd frissíti az exportot. A meglévő médiafájlokat nem törli. Önálló workerekkel
+használd a fenti naplózási mintát: `final_audio_mix.py --force`, majd siker esetén
+`final_qc_export.py --force`. A már lemezen lévő végső videó csak újrakeverés és
+export után változik meg. Közvetlen export elavult SFX-beállítású mix esetén
+újrakeverést kér.
+
+Az `enabled: false` kihagyja az effekteket; a `FINAL_MIX_SFX_VOLUME=0` csak az
+effektcsatornák hangerejét nullázza, a generálást nem tiltja.

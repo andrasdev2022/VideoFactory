@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sfx_policy import sound_effects_enabled
+
 from thumbnail_generator import thumbnail_ready, valid_image, thumbnail_signature
 
 import argparse
@@ -1245,6 +1247,9 @@ def run_final_qc_export(
     spec: dict,
     force: bool,
 ) -> bool:
+
+    if job.get('audio', {}).get('sfx_policy_enabled', True) != sound_effects_enabled(job):
+        raise RuntimeError('SFX setting changed. Run final_audio_mix.py before final export.')
 
     source_video = get_source_video(
         job
