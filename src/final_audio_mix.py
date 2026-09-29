@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sfx_policy import sound_effects_enabled, synchronize_sfx_policy
+
 import argparse
 import json
 import os
@@ -512,12 +514,7 @@ def collect_mix_inputs(
         {},
     )
 
-    effects_enabled = bool(
-        sound_effects.get(
-            "enabled",
-            False,
-        )
-    )
+    effects_enabled = sound_effects_enabled(job)
 
     effects: list[
         dict[str, Any]
@@ -1338,6 +1335,8 @@ def mix_audio(
     job: dict,
     force: bool,
 ) -> bool:
+
+    synchronize_sfx_policy(job)
 
     if shutil.which(
         "ffmpeg"

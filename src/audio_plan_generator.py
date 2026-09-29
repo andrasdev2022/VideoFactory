@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sfx_policy import sound_effects_enabled, synchronize_sfx_policy
+
 from genre_policy import genre_instruction
 
 import argparse
@@ -49,6 +51,7 @@ Rules:
 - Keep narration clearly dominant.
 - Return one concise background music style.
 - Use 0-4 sound effects total.
+- If sound_effects_enabled=false, return an empty effects list; plan music only.
 - Add only sound effects that materially improve a scene.
 - Use only supplied scene IDs.
 - offset_sec is relative to the beginning of that scene.
@@ -523,6 +526,9 @@ def apply_audio_plan(
     ] | None = None,
 ) -> None:
 
+    if not sound_effects_enabled(job):
+        output = output.model_copy(update={'effects': []})
+
     audio = job.setdefault(
         "audio",
         {},
@@ -548,7 +554,7 @@ def apply_audio_plan(
 
     sound_effects[
         "enabled"
-    ] = True
+    ] = sound_effects_enabled(job)
 
     sound_effects[
         "effects"
@@ -703,9 +709,12 @@ def main() -> int:
             )
             return 0
 
+        synchronize_sfx_policy(job)
         context = build_context(
             job
         )
+
+        context['sound_effects_enabled'] = sound_effects_enabled(job)
 
         if not context[
             "scenes"
@@ -766,6 +775,9 @@ def main() -> int:
             raise RuntimeError(
                 "Audio planner returned no parsed output."
             )
+
+        if not sound_effects_enabled(job):
+            result = result.model_copy(update={'effects': []})
 
         (
             filtered_effects,

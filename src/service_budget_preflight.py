@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sfx_policy import sound_effects_enabled
+
 import argparse
 import json
 import math
@@ -966,13 +968,7 @@ def estimate_elevenlabs_audio_credits(
 
     sfx_seconds = 0.0
 
-    if audio.get(
-        "sound_effects",
-        {},
-    ).get(
-        "enabled",
-        False,
-    ):
+    if sound_effects_enabled(job):
         for effect in (
             audio.get(
                 "sound_effects",

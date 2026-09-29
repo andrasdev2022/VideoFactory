@@ -85,6 +85,8 @@ A providerek, modellek és más runtime opciók környezeti változókból is sz
 A PR #21 óta az új job menti a `spec_snapshot` konfigurációt és a
 `creative_direction.genre` értéket. Resume ezt használja; későbbi YAML-módosítás
 az új videókra vonatkozik. Régi, snapshot nélküli jobok továbbra is YAML-t olvasnak.
+Kivétel: az aktuális YAML `audio.sound_effects.enabled: false` értéke meglévő
+jobnál is tiltja az SFX-generálást és -keverést. Részletek: [audio-volume.md](audio-volume.md).
 
 - `content.genre` szabad szöveg, nincs `--genre` kapcsoló.
 - A műfaji instrukció végigmegy a történeten, scripten, átírásokon, vizuális
