@@ -22,6 +22,7 @@ class GenrePolicyTests(unittest.TestCase):
         before = copy.deepcopy(spec)
         resolved = prepare_spec(spec)
         self.assertEqual(spec, before)
+        self.assertEqual(resolved["content"]["style"], "fast_paced")
         self.assertNotIn('punchline', resolved['content']['structure']['payoff']['purpose'])
         self.assertNotIn('comedy', resolved['visual']['style']['style_description'])
         self.assertNotEqual('energetic', resolved['audio']['voiceover']['style'])

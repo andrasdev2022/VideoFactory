@@ -14,7 +14,7 @@ a narrációgeneráló, a zenei tervező és a zenegeneráló. A hangeffektek in
 műfajsemleges, a tervezésük az adott történethez igazodik.
 
 A kód nem ír elő minden történetre poént, gyors tempót vagy játékos zenét.
-A nem komikus műfajoknál a régi YAML ismert komédia-alapértékei (fast_paced,
+A nem komikus műfajoknál a régi YAML ismert komédia-alapértékei (
 abszurd escalation/punchline, colorful surreal comedy, energetic narráció)
 a job létrehozásakor műfajhoz illő általános instrukcióvá alakulnak. Az eredeti
 YAML fájl nem módosul. A régi `core_joke` mező kompatibilitási okból megmarad,
@@ -71,3 +71,6 @@ migrálunk vagy generálunk újra automatikusan. Teljes műfajváltáshoz új jo
 indíts `--idea` használatával, az aktív job előzetes mentése után.
 
 Egyetlen jelenet módosításához: [scene-editing.md](scene-editing.md).
+
+A `content.style` értékét a genre policy változatlanul hagyja. A YAML alapértéke
+`pacing appropriate to the genre and emotional arc`; ezt szabadon felülírhatod.
