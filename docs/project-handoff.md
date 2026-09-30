@@ -1,11 +1,9 @@
 # VideoFactory — projektátadó
 
-Frissítve: **2026-09-27**. Ellenőrzött kiinduló `main` commit:
-`6415ac83123a5e8cd2c5d61e87d47dbec02cd470` (PR #22, első projektátadó merge).
-A legutóbbi igazolt helyi futás 2026-09-22-i; a szeptember 27-i Windows-runtime
-állapotát nem olvastuk vissza.
-Ez állapotfelvétel; új munkamenet elején ellenőrizd az aktuális repót és a helyi
-runtime jobot. A dokumentum nem helyettesíti a Windows gépen lévő futási állapotot.
+Frissítve: **2026-09-30**. Ellenőrzött main: `ebe96b155619f7af6af84946eda0b2f6687f1cf3`.
+PR #27 merge-elve, a felhasználó törölte a branchet. E dokumentációs PR előtt
+nem volt nyitott PR. A Windows runtime job továbbra is authoritative.
+Az alábbi aktuális állapot felülírja a későbbi, történeti fejezeteket.
 
 ## Új chat indítása
 
@@ -18,11 +16,91 @@ Másolható indítóüzenet:
 > A Windows gépemen lévő jobs/video_job.json az authoritative runtime state:
 > branchváltás vagy reset előtt meg kell őrizni. A teszt- és futtatási parancsok
 > stdout/stderr kimenete UTF-8 logfájlba kerüljön.
-> Kézi fázistesztet végzünk. A legutóbbi igazolt job: 20260922-095059,
-> The City Beneath the Moon. A narráció és globális időzítés kész, összesen
-> 29,60 s; a globálisan átírt narrációk végső elfogadása még nincs visszaigazolva.
-> Innen folytassuk: elfogadás után 5. fázis, vizuális promptok generálása.
-> Ne indítsd el automatikusan a teljes pipeline-t.
+> A legutóbbi igazolt job: 20260930-113010, The Grand Crocodile Beach Prank.
+> A kész videó 50,033 s, hat jelenet, still_motion, SFX nélkül, export PASS.
+> Következő feladat: implementáld az alább dokumentált, elfogadott QC-folytatási
+> mechanizmust, pontosan -OverruleQC és -RetryQC kapcsolókkal.
+> Ez még nincs implementálva. A kész videót ne regeneráld; fizetős API-hívást
+> ne indíts, helyi/mock tesztekkel dolgozz.
+
+## Aktuális állapot és következő fejlesztés — 2026-09-30
+
+### Elfogadott QC-folytatási mechanizmus — még nincs implementálva
+
+A felhasználó elfogadta a koncepciót. A pontos kapcsolónév **`-OverruleQC`**
+(egyetlen kötőjel, kis r; nem `-OverRuleQC`). A következő chat feladata az implementáció,
+a használati dokumentáció és az érdemi regressziós tesztek elkészítése feature PR-ben.
+
+1. QC-hiba után az eredeti generáláson felül legfeljebb **3 javítási próbálkozás**.
+   A számlálók a folytatások között megmaradnak; a jelenlegi eltérő limiteket ehhez
+   kell igazítani. Három összes generálás nem azonos három javítással.
+2. Sikertelenségnél leállás ELŐTT tartós folytatási pont mentése:
+   job ID, scene ID, pontos QC-fázis, érintett fájl és azonosító/lenyomat,
+   követelmények/config releváns azonossága, QC-eredmény, indoklás, próbálkozások.
+3. `python src/pipeline_orchestrator.py -OverruleQC`: kizárólag a mentett
+   jelenet adott QC-eredményét kézzel elfogadottnak jelöli, az elkészült médiát
+   megtartja, majd folytatja a pipeline-t. Az eredeti eredmény és a kézi döntés
+   dátummal megmarad az előzményekben; mentés készüljön a változtatás előtt.
+4. `python src/pipeline_orchestrator.py -RetryQC`: új javítási ciklus az érintett
+   jelenet hibás fázisánál. Csak a szükséges függő eredmények érvénytelenedjenek,
+   más kész jelenetek maradjanak meg. Teljesen új videó továbbra is `--idea`.
+5. Paraméter nélküli resume megoldatlan folytatási pontnál a hibát és a két
+   konkrét választható parancsot mutatja; nem bírál felül és nem költ újra magától.
+6. A felülbírálás **egyszeri**, nem az egész futásra érvényes QC-kikapcsolás.
+   A pont elfogyasztódik. Egy következő jelenet/fázis hibája új pontot hoz létre,
+   új felhasználói döntéssel; a CLI-flag nem terjedhet át erre automatikusan.
+7. Másik job, megváltozott média vagy elavult pont nem fogadható el a korábbi
+   döntéssel. Hiányzó/olvashatatlan fájl és egyéb valódi technikai hiba nem
+   minősíthető sikeresnek. Egymást kizáró kapcsolókat és hiányzó pontot ellenőrizni kell.
+8. Still-motion esetén ugyanannak a determinisztikus rendernek ismétlése nem
+   javítás: érdemi, QC-visszajelzéshez kötött korrekció kell. A megoldás nem
+   kerülheti meg a kötelező supervisor-ellenőrzést képgenerálás előtt.
+9. A leállási üzenet a tényleges okot és próbálkozásszámot közölje.
+
+Tesztelendő: fázis/jelenet izoláció, egyszeri felhasználás, második QC-hibánál új
+megállás, elavult/módosított fájl elutasítása, technikai hibák blokkolása,
+3 javítás számlálása, retry célzott invalidálása és előzmények megőrzése.
+
+### A problémát igazoló legutóbbi futás
+
+- Job `20260930-113010`, **The Grand Crocodile Beach Prank**; Cuki (bébi krokodil),
+  Pip (remeterák), Grandma Croc. Hat jelenet, animation_3d, still_motion.
+- `crocodile-20260930-132956.log`: supervisor APPROVED; az 1. jelenet képét
+  célzott javítás után elfogadta a QC. A videó-QC azt állította, hogy a tojás
+  alul kilóg az utolsó mintán. A felhasználó videója és a megvizsgált első/végéhez
+  közeli képkocka cáfolta ezt: a teljes tojás látható. Téves QC-elutasítás.
+- A scene orchestrator egyetlen still_motion render után megállt, de hibásan
+  „maximum 4 video attempts” üzenetet adott. Ez nem valós limitkimerülés volt.
+- Ideiglenes kézi JSON-felülbírálás történt mentéssel, előzményekkel:
+  `visuals.scenes[scene_id=1].video.semantic_qc` status=passed,
+  motion_matches_prompt=true, errors/problematic_sample_indices üres,
+  manual_override indoklással. A kulcs **visuals**, nem visual.
+- `crocodile-resume-20260930-135643.log`: az 1. jelenet médiája megmaradt;
+  mind a hat jelenet kész, a 4. kép elhajlott lapátja egy javítást igényelt.
+  Végső export **50,033 s**, `Publish ready: True`, `Exit code: 0`.
+- Kimenet: `output/20260930-113010/final/video.mp4`; narráció, felirat és zene
+  elkészült. SFX a tervben, generálásban és keverésben is 0.
+- A teljes kész videót nem vizsgáltuk meg; a sikert a log igazolja.
+  A legutolsó teljes Windows job JSON nincs feltöltve; ne helyettesítsd repo-jobbal.
+
+### Azóta elkészült fejlesztések és külön nyitott tételek
+
+- PR #25: kötelező vizuális supervisor a képgenerálás előtt, terv/QC-egyeztetés,
+  célzott képjavítás és szelektív invalidálás. Ezt meg kell őrizni.
+- PR #26: YAML `audio.sound_effects.enabled: false` tiltja az SFX-et végig,
+  meglévő job folytatásakor is.
+- PR #27: YAML TTS modell/hang/instrukció/numerikus sebesség/formátum bekötése,
+  cache-ellenőrzés és függőségek invalidálása. Dokumentáció: narration-settings.md.
+  A nem használt `gender` törölve. A genre_policy többé nem írja át a content.style-t;
+  YAML-alapérték: `pacing appropriate to the genre and emotional arc`.
+  Korábbi teljes tesztkészlet 326 sikeres teszt, PR CI zöld.
+- Külön, még nem implementált bootstrap-javítás: a „Prefer 1–3 characters” puha
+  prompt és a kötelező 1–3 validátor eltérése miatt az első krokodilos futás
+  megállt (`crocodile-20260930-132610.log`). Pontosan három szereplős ötlettel
+  sikerült. Szigorúbb instrukció, korlátos javítás és helyes bootstrap-resume
+  üzenet későbbi feladat; nem a most elfogadott QC-folytatás része.
+- Második, célzott QC-felülvizsgálat ötlete felmerült, de nem implementált,
+  és nem helyettesíti a most elfogadott felhasználói folytatási mechanizmust.
 
 ## Repo, környezet és munkaszabályok
 
@@ -49,7 +127,8 @@ Másolható indítóüzenet:
 ## Fő pipeline
 
 Ötlet / új job → forgatókönyv → jelenetenként TTS és időzítés → globális időzítés
-→ vizuális promptok és karakterreferenciák → jelenetképek, képi QC, jelenetvideók,
+→ vizuális és karakterreferencia-promptok → kötelező visual supervisor
+→ karakterreferencia-képek → jelenetképek, képi QC, jelenetvideók,
 videó-QC és vágás → összeállítás → felirat → audioterv → zene/SFX → hangkeverés
 → thumbnail → végső QC és export.
 
@@ -102,7 +181,8 @@ jobnál is tiltja az SFX-generálást és -keverést. Részletek: [audio-volume.
 
 ## Időtartam, thumbnail és service preflight
 
-- Cél 30 s, elfogadott tartomány 25–35 s. Nem szükséges pontosan 30 másodperc.
+- A cél és az elfogadott időtartomány a job specifikációjától függ. A régi
+  kézi teszt 30 s / 25–35 s értékeket használt; a legutóbbi export 50,033 s.
 - Végső QC legfeljebb egy kimeneti képkocka többletet enged encoder-kerekítésre.
 - Narrációt természetes tempóval generálunk és mérünk; túl hosszú szöveg átírható.
   A still_motion szükség esetén vizuális tartással is segíthet a minimum elérésén.
@@ -187,7 +267,10 @@ futás sikerét. A `*>` / `Out-File` vegyes kódolásait kerüld; UTF-8-at haszn
 Részletek: [test/README.md](../test/README.md).
 
 
-## Aktuális kézi fázisteszt — innen folytatjuk
+## Történeti kézi fázisteszt — 2026-09-22
+
+**Archív állapot, nem a következő feladat. Az akkori függő tételeket és
+folytatási parancsokat ne kezeld aktuális utasításként.**
 
 A felhasználó célja az egyes fázisok önálló futtatása, a kézi beavatkozás,
 a jelenetenkénti újragenerálás és a retry/fallback működésének kipróbálása.
@@ -365,7 +448,9 @@ Korábbi referenciák: `20260920-075808` (Paws & Relax, LTX/fallback),
 A legutóbbi ismert job nem feltétlenül a jelenlegi aktív job: ezt a helyi JSON
 alapján kell ellenőrizni. Az assistant workspace repo-jobja nem bizonyíték rá.
 
-## GitHub-állapot és következő lehetséges feladatok
+## Történeti GitHub-állapot és korábbi lehetséges feladatok
+
+Az alábbi lista szeptember 27-i archívum; az aktuális állapot a dokumentum elején van.
 
 2026-09-27-én ellenőrizve, e frissítés PR-jének megnyitása előtt:
 
