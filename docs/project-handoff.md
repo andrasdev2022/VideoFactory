@@ -1,6 +1,24 @@
 # VideoFactory — projektátadó
 
-Frissítve: **2026-09-30**. Ellenőrzött main: `ebe96b155619f7af6af84946eda0b2f6687f1cf3`.
+Frissítve: **2026-09-30**.
+
+### QC-folytatás implementációja — feature/scoped-qc-continuation
+
+Az elfogadott képi/videós QC-folytatás implementálva: pontosan `-OverruleQC`
+és `-RetryQC`, tartós, fájl- és követelménylenyomathoz kötött megállási ponttal,
+egyszeri, egy jelenet egy eredményére vonatkozó döntéssel. Kép/videó alaplimit:
+1 generálás + 3 javítás. A sima resume megoldatlan pontnál preflight előtt megáll.
+Technikai hiba nem bírálható felül. Still-motion esetén QC-visszajelzéses
+forráskép-javítás történik, a supervisor-kötelezettség megmarad.
+Használat, korlátok, mentés és UTF-8 Windows-parancsok: [qc-continuation.md](qc-continuation.md).
+
+A fejlesztés külön checkoutban, kizárólag helyi/mock tesztekkel készült;
+a Windows runtime jobot és a kész krokodilos videót nem módosítottuk,
+nem regeneráltuk, fizetős API-hívást nem indítottunk. A feature PR-t külön
+felhasználói kérés nélkül nem merge-eljük. Az alábbi „még nincs implementálva”
+megjelölések a fejlesztés előtti, elfogadott követelményeket rögzítik.
+
+ Ellenőrzött main: `ebe96b155619f7af6af84946eda0b2f6687f1cf3`.
 PR #27 merge-elve, a felhasználó törölte a branchet. E dokumentációs PR előtt
 nem volt nyitott PR. A Windows runtime job továbbra is authoritative.
 Az alábbi aktuális állapot felülírja a későbbi, történeti fejezeteket.

@@ -131,20 +131,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-image-attempts",
         type=int,
-        default=2,
+        default=4,
         help=(
             "Maximum image generations for "
-            "the scene. Default: 2"
+            "the scene (initial + 3 repairs). Default: 4"
         ),
     )
 
     parser.add_argument(
         "--max-video-attempts",
         type=int,
-        default=3,
+        default=4,
         help=(
             "Maximum video generations for "
-            "the scene. Default: 3"
+            "the scene (initial + 3 repairs). Default: 4"
         ),
     )
 
@@ -158,6 +158,9 @@ def parse_args() -> argparse.Namespace:
     )
 
     args = parser.parse_args()
+
+    if args.max_image_attempts > 4 or args.max_video_attempts > 4:
+        parser.error("Maximum 4 generations: initial + 3 repairs.")
 
     if args.max_image_attempts < 1:
 
@@ -1988,6 +1991,11 @@ def main() -> int:
 
         return 1
 
+    if job.get("qc_continuation"):
+        from qc_continuation import describe
+        print(describe(job["qc_continuation"]))
+        return 1
+
     script_scene = (
         find_script_scene(
             job,
@@ -2111,7 +2119,7 @@ def main() -> int:
         initial_state
     )
 
-    max_orchestrator_steps = 30
+    max_orchestrator_steps = 100
 
     # =====================================================
     # ORCHESTRATION LOOP
@@ -2157,7 +2165,16 @@ def main() -> int:
 
             return 1
 
-        action = choose_next_action(
+        from qc_continuation import route_failure, describe
+        scoped_action = route_failure(job, args.scene, PROJECT_ROOT,
+                                      args.max_image_attempts, args.max_video_attempts)
+        if scoped_action is not None:
+            save_job_atomic(job)
+        if scoped_action == "qc_blocked":
+            print(describe(job["qc_continuation"]))
+            return 1
+
+        action = scoped_action or choose_next_action(
             state=state,
             image_attempts=
                 image_attempts,
@@ -2518,6 +2535,10 @@ def main() -> int:
                 job
             )
 
+            if qc_result not in {"passed", "failed"}:
+                print(f"ERROR: {action} did not produce a QC result; worker exit={rc}. Technical failure, not a QC rejection.")
+                return 1
+
             continue
 
         # =================================================
@@ -2574,6 +2595,10 @@ def main() -> int:
             save_job_atomic(
                 job
             )
+
+            if semantic_result not in {"passed", "failed"}:
+                print(f"ERROR: {action} did not produce a QC result; worker exit={rc}. Technical failure, not a QC rejection.")
+                return 1
 
             continue
 
@@ -2753,6 +2778,10 @@ def main() -> int:
                 job
             )
 
+            if qc_result not in {"passed", "failed"}:
+                print(f"ERROR: {action} did not produce a QC result; worker exit={rc}. Technical failure, not a QC rejection.")
+                return 1
+
             continue
 
         # =================================================
@@ -2809,6 +2838,10 @@ def main() -> int:
             save_job_atomic(
                 job
             )
+
+            if semantic_result not in {"passed", "failed"}:
+                print(f"ERROR: {action} did not produce a QC result; worker exit={rc}. Technical failure, not a QC rejection.")
+                return 1
 
             continue
 
