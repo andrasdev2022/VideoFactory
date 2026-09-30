@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import Any
 
 from validator import load_json
+from genre_policy import runtime_spec
+from tts_settings import resolve_tts_settings
+from voice_generator import voice_settings_match
 
 
 PROJECT_ROOT = (
@@ -46,7 +49,7 @@ def parse_args() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(
         description=(
-            "Run natural-speed voice generation, "
+            "Run configured-speed voice generation, "
             "voice QC, and scene timing for one scene."
         )
     )
@@ -65,7 +68,7 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=3,
         help=(
-            "Maximum natural-speed TTS generations. "
+            "Maximum configured-speed TTS generations. "
             "Default: 3"
         ),
     )
@@ -255,7 +258,7 @@ def voice_is_natural_speed(
     return (
         abs(
             numeric_speed
-            - NATURAL_TTS_SPEED
+            - state.get("expected_voice_speed", NATURAL_TTS_SPEED)
         )
         <= SPEED_TOLERANCE
     )
@@ -275,6 +278,7 @@ def choose_next_action(
         not voice_is_generated(
             state
         )
+        or state.get("voice_settings_current") is False
         or not voice_is_natural_speed(
             state
         )
@@ -621,6 +625,10 @@ def main() -> int:
                 )
             )
 
+            spec = job.get('spec_snapshot') or runtime_spec(PROJECT_ROOT / 'config/video_spec_v1.yaml')
+            observed['expected_voice_speed'] = resolve_tts_settings(spec)['speed']
+            observed['voice_settings_current'] = voice_settings_match(spec, scene)
+
             orchestration_state = (
                 get_or_create_state(
                     job,
@@ -789,7 +797,7 @@ def main() -> int:
             )
 
             print(
-                f"\nStarting natural voice attempt "
+                f"\nStarting configured voice attempt "
                 f"{attempt}/"
                 f"{args.max_attempts}"
             )

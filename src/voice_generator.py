@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tts_settings import resolve_tts_settings
+
 from genre_policy import genre_instruction
 
 import argparse
@@ -42,22 +44,10 @@ JOB_FILE = (
 )
 
 
-TTS_MODEL = os.getenv(
-    "OPENAI_TTS_MODEL",
-    "gpt-4o-mini-tts",
-)
-
-TTS_VOICE = os.getenv(
-    "OPENAI_TTS_VOICE",
-    "marin",
-)
-
 TTS_FORMAT = os.getenv(
     "OPENAI_TTS_FORMAT",
     "wav",
 ).lower()
-
-TTS_SPEED = 1.0
 
 SUPPORTED_FORMATS = {
     "mp3",
@@ -77,7 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Generate per-scene voiceover audio "
-            "at natural speech speed."
+            "with configured speech settings."
         )
     )
 
@@ -361,12 +351,15 @@ def build_voice_instructions(
         f"Do not add, remove, paraphrase, or repeat words. "
         f"Read exactly the supplied text."
         + genre_instruction(spec=spec)
+        + ("\nAdditional delivery instructions: " + voice_spec["instructions"].strip()
+           if voice_spec.get("instructions", "").strip() else "")
     )
 
 
 def get_voice_output_path(
     job: dict,
     scene_id: int,
+    response_format: str | None = None,
 ) -> Path:
 
     job_id = job.get(
@@ -397,7 +390,7 @@ def get_voice_output_path(
         / (
             f"scene_"
             f"{scene_id:03d}."
-            f"{TTS_FORMAT}"
+            f"{response_format or TTS_FORMAT}"
         )
     )
 
@@ -439,6 +432,26 @@ def scene_voice_is_generated(
     return path.exists()
 
 
+def effective_voice_instructions(spec):
+    settings = resolve_tts_settings(spec)
+    if not settings['model'].startswith('gpt-4o-mini-tts'):
+        return ''
+    instructions = build_voice_instructions(spec)
+    if len(instructions) > 4096:
+        raise ValueError('Combined TTS instructions exceed 4096 characters.')
+    return instructions
+
+
+def voice_settings_match(spec, scene):
+    settings = resolve_tts_settings(spec)
+    voice = scene.get('voice', {})
+    text, _ = extract_scene_voice_text(scene)
+    return (all(voice.get(key) == settings[setting] for key, setting in
+                (('model', 'model'), ('voice', 'voice'), ('speed', 'speed'), ('format', 'response_format')))
+            and voice.get('input_text') == text
+            and voice.get('instructions', '') == effective_voice_instructions(spec))
+
+
 def generate_scene_voice(
     client: OpenAI,
     spec: dict,
@@ -457,40 +470,10 @@ def generate_scene_voice(
             "Script scene has no scene_id."
         )
 
-    if (
-        scene_voice_is_generated(
-            scene
-        )
-        and not force
-    ):
-
-        existing_speed = (
-            scene
-            .get(
-                "voice",
-                {},
-            )
-            .get(
-                "speed"
-            )
-        )
-
-        if (
-            existing_speed is not None
-            and abs(
-                float(existing_speed)
-                - TTS_SPEED
-            )
-            < 0.001
-        ):
-
-            print(
-                f"  SKIP: Scene {scene_id} "
-                f"voiceover already exists "
-                f"at natural speed."
-            )
-
-            return False
+    settings = resolve_tts_settings(spec)
+    if scene_voice_is_generated(scene) and not force and voice_settings_match(spec, scene):
+        print(f"  SKIP: Scene {scene_id} voice settings and text are unchanged.")
+        return False
 
     (
         voice_text,
@@ -508,6 +491,7 @@ def generate_scene_voice(
         get_voice_output_path(
             job,
             scene_id,
+            settings["response_format"],
         )
     )
 
@@ -523,11 +507,7 @@ def generate_scene_voice(
 
         temporary_path.unlink()
 
-    instructions = (
-        build_voice_instructions(
-            spec
-        )
-    )
+    instructions = effective_voice_instructions(spec)
 
     planned_duration = (
         get_scene_duration(
@@ -543,22 +523,22 @@ def generate_scene_voice(
 
     print(
         f"  Model:       "
-        f"{TTS_MODEL}"
+        f"{settings['model']}"
     )
 
     print(
         f"  Voice:       "
-        f"{TTS_VOICE}"
+        f"{settings['voice']}"
     )
 
     print(
         f"  Format:      "
-        f"{TTS_FORMAT}"
+        f"{settings['response_format']}"
     )
 
     print(
         f"  Speed:       "
-        f"{TTS_SPEED:.2f} (fixed natural speed)"
+        f"{settings['speed']:.2f} (configured speed)"
     )
 
     print(
@@ -586,14 +566,13 @@ def generate_scene_voice(
             .speech
             .with_streaming_response
             .create(
-                model=TTS_MODEL,
-                voice=TTS_VOICE,
+                model=settings["model"],
+                voice=settings["voice"],
                 input=voice_text,
-                instructions=
-                    instructions,
+                **({"instructions": instructions} if settings["model"].startswith("gpt-4o-mini-tts") else {}),
                 response_format=
-                    TTS_FORMAT,
-                speed=TTS_SPEED,
+                    settings["response_format"],
+                speed=settings["speed"],
             )
         ) as response:
 
@@ -653,16 +632,16 @@ def generate_scene_voice(
             "openai",
 
         "model":
-            TTS_MODEL,
+            settings["model"],
 
         "voice":
-            TTS_VOICE,
+            settings["voice"],
 
         "format":
-            TTS_FORMAT,
+            settings["response_format"],
 
         "speed":
-            TTS_SPEED,
+            settings["speed"],
 
         "source_field":
             source_field,
@@ -686,6 +665,23 @@ def generate_scene_voice(
                 "pending",
         },
     }
+
+    # Invalidate derivatives containing old audio or depending on its duration.
+    job.pop('timing_summary', None)
+    state = job.get('orchestration', {}).get('scenes', {}).get(str(scene_id))
+    if state is not None:
+        state.update(video_attempts=0, state='in_progress')
+    for visual in job.get('visuals', {}).get('scenes', []):
+        if visual.get('scene_id') == scene_id:
+            for key in ('video', 'motion_strategy', 'semantic_qc_policy'):
+                visual.pop(key, None)
+    for key in ('generation', 'render'):
+        job.get('subtitles', {}).pop(key, None)
+    for key in ('plan', 'assets', 'mix'):
+        job.get('audio', {}).pop(key, None)
+    job.pop('final_qc', None)
+    for key in ('video_file', 'mixed_video_file', 'subtitled_video_file', 'subtitle_file'):
+        job.get('output', {}).pop(key, None)
 
     # A new voice invalidates previous timing.
     if "timing" in scene:
@@ -765,6 +761,7 @@ def main() -> int:
         spec = load_yaml(
             SPEC_FILE
         )
+        settings = resolve_tts_settings(spec)
 
         job = load_json(
             JOB_FILE
@@ -834,18 +831,18 @@ def main() -> int:
 
     print(
         f"Model:  "
-        f"{TTS_MODEL}"
+        f"{settings['model']}"
     )
 
     print(
         f"Voice:  "
-        f"{TTS_VOICE}"
+        f"{settings['voice']}"
     )
 
     print(
         f"Speed:  "
-        f"{TTS_SPEED:.2f} "
-        f"(fixed)"
+        f"{settings['speed']:.2f} "
+        f"(configured)"
     )
 
     print(

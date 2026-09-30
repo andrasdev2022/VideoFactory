@@ -137,6 +137,13 @@ kerül az elfogadott tartományon, leáll a globális átírás helyett.
 A saját jelenetzene csak annak idősávjában váltja fel az alap háttérzenét.
 Részletes, logoló Windows-parancsok: [scene-editing.md](scene-editing.md).
 
+## Narráció konfigurálása
+
+A `audio.voiceover` YAML-szekcióban modell, hang, stílus, instrukció, sebesség és
+formátum állítható. A környezeti felülírások és a job snapshotjának elsőbbsége,
+a támogatott értékek, valamint a meglévő narráció cseréjének menete:
+[narration-settings.md](narration-settings.md).
+
 ## Hangerő és újrakeverés
 
 A már generált zenét/TTS-t nem szükséges újragenerálni. A

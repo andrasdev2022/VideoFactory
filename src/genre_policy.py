@@ -45,8 +45,6 @@ def prepare_spec(spec):
     content['genre'] = name
     content['genre_instruction'] = genre_instruction(spec=result)
     if 'comedy' not in name.lower():
-        if content.get('style') == 'fast_paced':
-            content['style'] = 'pacing appropriate to the genre and emotional arc'
         for beat in content.get('structure', {}).values():
             if isinstance(beat, dict):
                 purpose = beat.get('purpose', '')
