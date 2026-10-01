@@ -2,6 +2,17 @@
 
 Frissítve: **2026-09-30**.
 
+### 2026-10-01 — still-motion időkorlát javítása
+
+Main ellenőrizve: `664310e`, #29 továbbra is nyitott. A #29 feature branch
+kiegészült: a közös videógenerátor still-motion esetén a mentett, jóváhagyott
+timing hosszkorlátját használja a fix 10 s helyett. Runway/Local LTX változatlan.
+Aktuális felhasználói job: `20261001-121737`, 50 s tervezett hossz, első két
+jelenet kész; a harmadik kép QC-passed, videója 11,712 s-nál konfigurációs hibán
+megállt. Sima resume kell, QC-felülbírálás nélkül. Mentési és célzott frissítési
+parancsok: [still-motion-duration-resume.md](still-motion-duration-resume.md).
+A Windows runtime jobhoz/médiákhoz nem nyúltunk. Fizetős API-t nem futtattunk.
+
 ### QC-folytatás implementációja — feature/scoped-qc-continuation
 
 Az elfogadott képi/videós QC-folytatás implementálva: pontosan `-OverruleQC`

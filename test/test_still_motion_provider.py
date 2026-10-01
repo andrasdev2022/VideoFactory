@@ -12,13 +12,53 @@ import image_to_video_generator as generator
 import pipeline_orchestrator as master
 import still_motion_provider as provider
 from local_ltx_motion_policy import system_prompt
-from scene_orchestrator import choose_next_action, ACTION_STOP_VIDEO
+from scene_orchestrator import choose_next_action, ACTION_STOP_VIDEO, ACTION_GENERATE_VIDEO, ACTION_COMPLETE
 from test_scene_orchestrator import make_state
 from test_video_semantic_qc_policy import make_result
 from video_semantic_qc import build_context, evaluate_result
 
 
 class StillMotionTests(unittest.TestCase):
+    def test_provider_bounds_follow_approved_timing_only_for_still_motion(self):
+        scene = {"scene_id": 3, "motion_prompt": "Hold",
+                 "image": {"file": "image.png", "qc": {"status": "passed"},
+                           "semantic_qc": {"status": "passed"}}}
+        timing = {"status": "passed", "render_duration_sec": 11.712,
+                  "min_video_duration_sec": 2, "max_video_duration_sec": 24}
+        job = {"script": {"scenes": [{"scene_id": 3, "timing": timing}]}}
+        with patch.object(generator, "VIDEO_PROVIDER", "still_motion"):
+            # An environment change must not invalidate already approved media.
+            with patch.dict(os.environ, {"SCENE_TIMING_MAX_VIDEO_SEC": "10"}):
+                for duration in (11.712, 22.262, 24):
+                    timing["render_duration_sec"] = duration
+                    self.assertEqual(generator.validate_scene_preconditions(job, scene), [])
+            for duration in (24.001, 0, -1, float("nan"), float("inf")):
+                timing["render_duration_sec"] = duration
+                self.assertTrue(generator.validate_scene_preconditions(job, scene))
+            timing["render_duration_sec"] = 11.712
+            for maximum in (None, "bad", float("nan"), float("inf"), 0, 1):
+                timing["max_video_duration_sec"] = maximum
+                self.assertTrue(generator.validate_scene_preconditions(job, scene))
+            timing.pop("max_video_duration_sec")
+            self.assertTrue(generator.validate_scene_preconditions(job, scene))
+        timing["max_video_duration_sec"] = 24
+        for name in ("runway", "local_ltx"):
+            with patch.object(generator, "VIDEO_PROVIDER", name):
+                self.assertTrue(generator.validate_scene_preconditions(job, scene))
+        with self.assertRaises(RuntimeError):
+            generator.get_provider_duration(11.712)
+
+    def test_resume_configuration_failure_reuses_approved_image(self):
+        state = make_state(render_duration_sec=11.712, image_status="generated",
+            image_file="scene_003.png", image_qc="passed", image_semantic_qc="passed",
+            video_status="failed", video_error_type="RuntimeError", video_provider="still_motion")
+        self.assertEqual(choose_next_action(state, 1, 1, 4, 4), ACTION_GENERATE_VIDEO)
+        state = make_state(image_status="generated", image_file="scene_001.png",
+            image_qc="passed", image_semantic_qc="passed", video_status="generated",
+            video_file="scene_001.mp4", video_provider="still_motion", video_qc="passed",
+            video_semantic_qc="passed", trimmed_status="passed", trimmed_file="trimmed.mp4")
+        self.assertEqual(choose_next_action(state, 2, 1, 4, 4), ACTION_COMPLETE)
+
     def test_config_and_frame_rounding(self):
         with patch.dict(os.environ, {"STILL_MOTION_MODE": "zoom", "STILL_MOTION_MAX_ZOOM": "1.05"}):
             config = provider.load_config()
@@ -87,7 +127,8 @@ class StillMotionTests(unittest.TestCase):
                     "image": {"file": "image.png", "qc": {"status": "passed"},
                               "semantic_qc": {"status": "passed"}}}
                 job = {"job_id": "test", "script": {"scenes": [{"scene_id": 1,
-                    "timing": {"status": "passed", "render_duration_sec": 2.05}}]}}
+                    "timing": {"status": "passed", "render_duration_sec": 11.712,
+                               "min_video_duration_sec": 2, "max_video_duration_sec": 24}}]}}
                 with (
                     patch.dict(os.environ, {"STILL_MOTION_MODE": mode, "STILL_MOTION_MAX_ZOOM": "1.05"}),
                     patch.object(generator, "PROJECT_ROOT", root),
@@ -103,12 +144,12 @@ class StillMotionTests(unittest.TestCase):
                     output = root / scene["video"]["file"]
                     probe = json.loads(subprocess.check_output(["ffprobe", "-v", "error", "-select_streams", "v:0",
                         "-show_entries", "stream=width,height,nb_frames,r_frame_rate", "-of", "json", str(output)], text=True))
-                    self.assertEqual(probe["streams"][0]["nb_frames"], "50")
+                    self.assertEqual(probe["streams"][0]["nb_frames"], "282")
                     self.assertEqual(probe["streams"][0]["width"], 720)
                     self.assertEqual(probe["streams"][0]["height"], 1280)
                     scene["video"]["still_motion_config"]["max_zoom"] = 1.08
                     self.assertFalse(generator.video_metadata_matches_current_request(
-                        scene, output, 2.05, 50 / 24, "image.png", "still_motion"))
+                        scene, output, 11.712, 282 / 24, "image.png", "still_motion"))
 
 
 if __name__ == "__main__":
