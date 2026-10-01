@@ -1,6 +1,35 @@
 # VideoFactory — projektátadó
 
-Frissítve: **2026-09-30**. Ellenőrzött main: `ebe96b155619f7af6af84946eda0b2f6687f1cf3`.
+Frissítve: **2026-09-30**.
+
+### 2026-10-01 — still-motion időkorlát javítása
+
+Main ellenőrizve: `664310e`, #29 továbbra is nyitott. A #29 feature branch
+kiegészült: a közös videógenerátor still-motion esetén a mentett, jóváhagyott
+timing hosszkorlátját használja a fix 10 s helyett. Runway/Local LTX változatlan.
+Aktuális felhasználói job: `20261001-121737`, 50 s tervezett hossz, első két
+jelenet kész; a harmadik kép QC-passed, videója 11,712 s-nál konfigurációs hibán
+megállt. Sima resume kell, QC-felülbírálás nélkül. Mentési és célzott frissítési
+parancsok: [still-motion-duration-resume.md](still-motion-duration-resume.md).
+A Windows runtime jobhoz/médiákhoz nem nyúltunk. Fizetős API-t nem futtattunk.
+
+### QC-folytatás implementációja — feature/scoped-qc-continuation
+
+Az elfogadott képi/videós QC-folytatás implementálva: pontosan `-OverruleQC`
+és `-RetryQC`, tartós, fájl- és követelménylenyomathoz kötött megállási ponttal,
+egyszeri, egy jelenet egy eredményére vonatkozó döntéssel. Kép/videó alaplimit:
+1 generálás + 3 javítás. A sima resume megoldatlan pontnál preflight előtt megáll.
+Technikai hiba nem bírálható felül. Still-motion esetén QC-visszajelzéses
+forráskép-javítás történik, a supervisor-kötelezettség megmarad.
+Használat, korlátok, mentés és UTF-8 Windows-parancsok: [qc-continuation.md](qc-continuation.md).
+
+A fejlesztés külön checkoutban, kizárólag helyi/mock tesztekkel készült;
+a Windows runtime jobot és a kész krokodilos videót nem módosítottuk,
+nem regeneráltuk, fizetős API-hívást nem indítottunk. A feature PR-t külön
+felhasználói kérés nélkül nem merge-eljük. Az alábbi „még nincs implementálva”
+megjelölések a fejlesztés előtti, elfogadott követelményeket rögzítik.
+
+ Ellenőrzött main: `ebe96b155619f7af6af84946eda0b2f6687f1cf3`.
 PR #27 merge-elve, a felhasználó törölte a branchet. E dokumentációs PR előtt
 nem volt nyitott PR. A Windows runtime job továbbra is authoritative.
 Az alábbi aktuális állapot felülírja a későbbi, történeti fejezeteket.

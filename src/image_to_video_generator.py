@@ -325,19 +325,27 @@ def validate_scene_preconditions(
             f"render_duration_sec is missing."
         )
 
-    elif not (
-        MIN_DURATION_SEC
-        <= render_duration
-        <= MAX_DURATION_SEC
-    ):
-
-        errors.append(
-            f"Scene {scene_id}: "
-            f"render duration {render_duration}s is outside "
-            f"supported range "
-            f"{MIN_DURATION_SEC}-"
-            f"{MAX_DURATION_SEC}s."
-        )
+    else:
+        minimum, maximum = float(MIN_DURATION_SEC), float(MAX_DURATION_SEC)
+        if VIDEO_PROVIDER == "still_motion":
+            # FFmpeg has no Runway-style ten-second limit. Use the bounds
+            # that approved this artifact, not a new environment value which
+            # could change underneath a resumed job.
+            timing = find_script_scene(job, scene_id).get("timing", {})
+            try:
+                minimum = float(timing.get("min_video_duration_sec", minimum))
+                maximum = float(timing.get("max_video_duration_sec", maximum))
+            except (TypeError, ValueError):
+                errors.append(f"Scene {scene_id}: invalid approved timing bounds.")
+                return errors
+        if not (math.isfinite(minimum) and math.isfinite(maximum)
+                and 0 < minimum <= maximum):
+            errors.append(f"Scene {scene_id}: invalid approved timing bounds.")
+        elif not (math.isfinite(render_duration) and minimum <= render_duration <= maximum):
+            errors.append(
+                f"Scene {scene_id}: render duration {render_duration}s is outside "
+                f"supported range {minimum:g}-{maximum:g}s."
+            )
 
     return errors
 

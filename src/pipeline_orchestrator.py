@@ -122,8 +122,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-image-attempts",
         type=int,
-        default=2,
-        help="Maximum image generations per scene. Default: 2",
+        default=4,
+        help="Maximum image generations (initial + 3 repairs). Default: 4",
     )
 
     parser.add_argument(
@@ -144,7 +144,14 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument("--visual-style", choices=CHOICES, default=None, help="Visual preset; requires --idea. Resume uses the saved job style.")
+    decisions = parser.add_mutually_exclusive_group()
+    decisions.add_argument("-OverruleQC", action="store_true", help="Accept only the saved semantic QC result.")
+    decisions.add_argument("-RetryQC", action="store_true", help="Start a new repair cycle at the saved QC phase.")
     args = parser.parse_args()
+    if args.idea is not None and (args.OverruleQC or args.RetryQC):
+        parser.error("QC continuation flags cannot be combined with --idea.")
+    if args.max_image_attempts > 4 or args.max_video_attempts > 4:
+        parser.error("QC generation limits must not exceed 4 (initial + 3 repairs).")
     if args.visual_style is not None and args.idea is None:
         parser.error("--visual-style requires --idea; resume preserves the saved job style.")
 
@@ -1800,6 +1807,12 @@ def main() -> int:
     args = parse_args()
 
     try:
+        from qc_continuation import resolve
+        if args.idea is None and JOB_FILE.exists():
+            resolve(JOB_FILE, PROJECT_ROOT,
+                    "overrule" if args.OverruleQC else "retry" if args.RetryQC else None)
+        elif args.OverruleQC or args.RetryQC:
+            raise PipelineError("Nincs mentett QC-folytatási pont.")
         preflight()
 
         run_pipeline(
