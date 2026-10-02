@@ -1806,6 +1806,18 @@ def main() -> int:
 
     args = parse_args()
 
+    if args.idea is not None:
+        try:
+            from validator import load_yaml
+            from tts_settings import validate_idea_tts_environment
+            from duration_policy import scene_duration_range
+            spec = load_yaml(PROJECT_ROOT / "config" / "video_spec_v1.yaml")
+            validate_idea_tts_environment(spec)
+            scene_duration_range(spec)
+        except Exception as exc:
+            print(f"\nERROR: {exc}")
+            return 1
+
     try:
         from qc_continuation import resolve
         if args.idea is None and JOB_FILE.exists():

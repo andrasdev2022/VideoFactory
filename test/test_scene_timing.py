@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import scene_timing
 
@@ -20,22 +21,15 @@ class SceneTimingTests(
             scene_timing.HEADROOM_SEC
         )
 
-        self.old_min = (
-            scene_timing.MIN_VIDEO_SEC
-        )
-
-        self.old_max = (
-            scene_timing.MAX_VIDEO_SEC
-        )
-
         self.old_tolerance = (
             scene_timing
             .TARGET_TOLERANCE_SEC
         )
 
         scene_timing.HEADROOM_SEC = 0.30
-        scene_timing.MIN_VIDEO_SEC = 2.0
-        scene_timing.MAX_VIDEO_SEC = 10.0
+        spec_patch = patch.object(scene_timing, "load_yaml", return_value={"visual": {"scene": {"min_duration_sec": 2, "max_duration_sec": 10}}})
+        spec_patch.start()
+        self.addCleanup(spec_patch.stop)
         scene_timing.TARGET_TOLERANCE_SEC = 4.0
 
 
@@ -45,14 +39,6 @@ class SceneTimingTests(
 
         scene_timing.HEADROOM_SEC = (
             self.old_headroom
-        )
-
-        scene_timing.MIN_VIDEO_SEC = (
-            self.old_min
-        )
-
-        scene_timing.MAX_VIDEO_SEC = (
-            self.old_max
         )
 
         scene_timing.TARGET_TOLERANCE_SEC = (

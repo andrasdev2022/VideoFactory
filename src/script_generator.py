@@ -108,6 +108,8 @@ def build_context(spec: dict, job: dict) -> dict:
     Build only the context needed by the script generator.
     """
 
+    from duration_policy import scene_planning_spec
+    spec = scene_planning_spec(spec)
     return {
         "video_spec": {
             "video": spec["video"],

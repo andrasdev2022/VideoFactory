@@ -19,7 +19,8 @@ def extend_visual_holds(job: dict, spec: dict) -> bool:
         duration = float(timing.get('render_duration_sec') or 0)
         voice = float(qc.get('actual', {}).get('duration_sec') or 0)
         headroom = float(timing.get('headroom_sec', 0.3))
-        limit = float(timing.get('max_video_duration_sec', 10))
+        from duration_policy import approved_scene_duration_range
+        _, limit = approved_scene_duration_range(job, timing, "still_motion")
         if not all(math.isfinite(v) for v in (duration, voice, headroom, limit)):
             return False
         if voice <= 0 or headroom < 0 or duration + 0.001 < voice + headroom or duration > limit:
