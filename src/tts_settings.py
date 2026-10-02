@@ -8,7 +8,6 @@ LEGACY_VOICES = VOICES - {'ballad', 'verse', 'marin', 'cedar'}
 MODELS = {'gpt-4o-mini-tts', 'gpt-4o-mini-tts-2025-12-15', 'tts-1', 'tts-1-hd'}
 FORMATS = {'wav', 'mp3', 'opus', 'aac', 'flac'}
 
-
 def resolve_tts_settings(spec):
     voice = spec.get('audio', {}).get('voiceover', {})
     def value(key, env, default):
@@ -39,3 +38,24 @@ def resolve_tts_settings(spec):
     if model in {'tts-1', 'tts-1-hd'} and instructions.strip():
         raise ValueError('tts-1 and tts-1-hd do not support instructions; use gpt-4o-mini-tts.')
     return {'model': model, 'voice': name, 'speed': speed, 'response_format': fmt}
+
+
+def validate_idea_tts_environment(spec: dict) -> None:
+    """Reject explicit environment conflicts before a new job can replace the old one."""
+    voice = spec.get('audio', {}).get('voiceover', {})
+    conflicts = []
+    for key, env, default in (
+        ('voice', 'OPENAI_TTS_VOICE', 'marin'),
+        ('model', 'OPENAI_TTS_MODEL', 'gpt-4o-mini-tts'),
+        ('response_format', 'OPENAI_TTS_FORMAT', 'wav'),
+    ):
+        expected = voice.get(key, default)
+        actual = os.getenv(env)
+        if actual is not None and actual != expected:
+            conflicts.append(f'  audio.voiceover.{key}={expected!r}; {env}={actual!r}')
+    if conflicts:
+        raise ValueError('TTS YAML/environment mismatch:\n' + '\n'.join(conflicts)
+                         + '\nFix config/video_spec_v1.yaml or the environment (including enter-dev.ps1), '
+                         'or remove the conflicting environment variable, then rerun with --idea. '
+                         'No new job was started.')
+    resolve_tts_settings(spec)

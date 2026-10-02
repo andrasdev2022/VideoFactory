@@ -45,20 +45,6 @@ HEADROOM_SEC = float(
     )
 )
 
-MIN_VIDEO_SEC = float(
-    os.getenv(
-        "SCENE_TIMING_MIN_VIDEO_SEC",
-        "2.0",
-    )
-)
-
-MAX_VIDEO_SEC = float(
-    os.getenv(
-        "SCENE_TIMING_MAX_VIDEO_SEC",
-        "10.0",
-    )
-)
-
 TARGET_TOLERANCE_SEC = float(
     os.getenv(
         "SCENE_TIMING_TARGET_TOLERANCE_SEC",
@@ -147,7 +133,11 @@ def find_scene(
 def calculate_scene_timing(
     voice_duration_sec: float,
     planned_duration_sec: float,
+    spec: dict | None = None,
 ) -> dict[str, Any]:
+
+    from duration_policy import scene_duration_range
+    minimum, maximum = scene_duration_range(spec if spec is not None else load_yaml(SPEC_FILE))
 
     raw_render_duration = (
         voice_duration_sec
@@ -155,7 +145,7 @@ def calculate_scene_timing(
     )
 
     render_duration = max(
-        MIN_VIDEO_SEC,
+        minimum,
         raw_render_duration,
     )
 
@@ -166,7 +156,7 @@ def calculate_scene_timing(
 
     if (
         raw_render_duration
-        > MAX_VIDEO_SEC
+        > maximum
     ):
 
         script_revision_required = True
@@ -176,7 +166,7 @@ def calculate_scene_timing(
             f"requires {raw_render_duration:.3f}s, "
             f"which exceeds the maximum "
             f"video generation duration "
-            f"of {MAX_VIDEO_SEC:.3f}s."
+            f"of {maximum:.3f}s."
         )
 
     planned_delta = (
@@ -240,10 +230,10 @@ def calculate_scene_timing(
             ),
 
         "min_video_duration_sec":
-            MIN_VIDEO_SEC,
+            minimum,
 
         "max_video_duration_sec":
-            MAX_VIDEO_SEC,
+            maximum,
 
         "script_revision_required":
             script_revision_required,
@@ -429,6 +419,7 @@ def calculate_job_timing_summary(
 
 def process_scene(
     scene: dict,
+    spec: dict | None = None,
 ) -> bool:
 
     scene_id = scene.get(
@@ -512,6 +503,7 @@ def process_scene(
             ),
         planned_duration_sec=
             planned_duration,
+        spec=spec,
     )
 
     return (
@@ -603,7 +595,7 @@ def main() -> int:
         try:
 
             passed = process_scene(
-                scene
+                scene, spec
             )
 
         except Exception as exc:

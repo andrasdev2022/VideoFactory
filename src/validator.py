@@ -118,8 +118,12 @@ def validate_video_job(spec: dict, job: dict) -> list[str]:
     # 5. INDIVIDUAL SCENE DURATIONS
     # ---------------------------------------------------------
 
-    min_scene_duration = spec["visual"]["scene"]["min_duration_sec"]
-    max_scene_duration = spec["visual"]["scene"]["max_duration_sec"]
+    from duration_policy import scene_duration_range
+    try:
+        min_scene_duration, max_scene_duration = scene_duration_range(spec)
+    except (ValueError, TypeError) as exc:
+        errors.append(str(exc))
+        return errors
 
     for scene in scenes:
         scene_id = scene.get("scene_id", "?")

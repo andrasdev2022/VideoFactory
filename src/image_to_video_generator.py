@@ -57,8 +57,9 @@ TASK_TIMEOUT_SEC = int(
     )
 )
 
-MIN_DURATION_SEC = 2
-MAX_DURATION_SEC = 10
+from duration_policy import PROVIDER_SCENE_BOUNDS, approved_scene_duration_range
+
+MIN_DURATION_SEC, MAX_DURATION_SEC = PROVIDER_SCENE_BOUNDS["runway"]
 
 
 # ---------------------------------------------------------
@@ -326,18 +327,12 @@ def validate_scene_preconditions(
         )
 
     else:
-        minimum, maximum = float(MIN_DURATION_SEC), float(MAX_DURATION_SEC)
-        if VIDEO_PROVIDER == "still_motion":
-            # FFmpeg has no Runway-style ten-second limit. Use the bounds
-            # that approved this artifact, not a new environment value which
-            # could change underneath a resumed job.
-            timing = find_script_scene(job, scene_id).get("timing", {})
-            try:
-                minimum = float(timing.get("min_video_duration_sec", minimum))
-                maximum = float(timing.get("max_video_duration_sec", maximum))
-            except (TypeError, ValueError):
-                errors.append(f"Scene {scene_id}: invalid approved timing bounds.")
-                return errors
+        timing = find_script_scene(job, scene_id).get("timing", {})
+        try:
+            minimum, maximum = approved_scene_duration_range(job, timing, VIDEO_PROVIDER)
+        except (TypeError, ValueError) as exc:
+            errors.append(f"Scene {scene_id}: invalid approved timing bounds: {exc}")
+            return errors
         if not (math.isfinite(minimum) and math.isfinite(maximum)
                 and 0 < minimum <= maximum):
             errors.append(f"Scene {scene_id}: invalid approved timing bounds.")

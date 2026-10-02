@@ -1,6 +1,37 @@
 # VideoFactory — projektátadó
 
-Frissítve: **2026-09-30**.
+Frissítve: **2026-10-02**.
+
+### 2026-10-02 — egységes jelenethossz és új-job TTS-ellenőrzés
+
+Ellenőrzött main: `a01f40d`; #29 merge-elve, branch törölve, új fejlesztés előtt
+nem volt nyitott PR. A `20261001-121737` krokodilos job időközben elkészült:
+a felhasználói resume-log szerint végső QC PASS, Publish ready True, exit 0.
+A `-OverruleQC` / `-RetryQC` felhasználói E2E-tesztje még hátravan.
+Az alábbi régebbi állapotbejegyzések történeti adatok.
+
+Új feature: `feature/unified-scene-bounds` (külön kérés nélkül nem merge-elhető).
+- `SCENE_TIMING_MIN_VIDEO_SEC` és `SCENE_TIMING_MAX_VIDEO_SEC` eltávolítva az
+  enter-dev.ps1-ből és az aktív kódból. Régi shellben maradt értékük hatástalan.
+- Jelenetminimum: max(YAML minimum, provider minimum); maximum: min(YAML maximum,
+  provider maximum). Tervezés, validálás, mért időzítés és videó-előfeltétel közös
+  szabályt használ. Üres metszet új `--idea` esetén preflight előtt hibát ad.
+- Still-motion esetén nincs külön 10 s providerplafon. Runway és Local LTX
+  meglévő 2–10 s pipeline-tartománya megmarad; az LTX-tartomány nem a modell
+  elméleti technikai maximumának állítása.
+- A runtime spec_snapshot az irányadó; snapshot nélküli régi job videója a mentett
+  timing-határokat használja, hiányuk esetén a korábbi 2–10 s alapértékkel.
+- Új `--idea` előtt az aktuális YAML voice/model/response_format értékei és az
+  OPENAI_TTS_VOICE/MODEL/FORMAT explicit környezeti értékei egyezzenek. Hiányzó
+  változó megengedett; eltéréskor minden eltérés és javítási útmutató megjelenik.
+  Ez a guard nem módosítja a régi jobot, nem indít preflightot vagy bootstrapot.
+  Sima resume-nál nincs új összehasonlítás az aktuális YAML-lal.
+- A TTS instructions továbbadása és a meglévő cache-ellenőrzés változatlan.
+  A meglévő mock request teszt ellenőrzi az instructions továbbadását is.
+
+Ellenőrzés: 357 helyi teszt PASS (köztük FFmpeg és mock TTS-kérések).
+Kizárólag helyi/mock tesztelés; Windows runtime jobhoz/médiákhoz nem nyúltunk,
+fizetős API-t nem indítottunk. A kész videót nem kell újragenerálni.
 
 ### 2026-10-01 — still-motion időkorlát javítása
 
