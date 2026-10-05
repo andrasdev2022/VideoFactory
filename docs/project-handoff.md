@@ -1,6 +1,34 @@
 # VideoFactory — projektátadó
 
-Frissítve: **2026-10-02**.
+Frissítve: **2026-10-05**.
+
+### 2026-10-05 — eredeti narrációs követelmények megőrzése
+
+Ellenőrzött main: `a508c5f`; #30 merge-elve, új fejlesztés előtt nem volt nyitott PR.
+Új feature: `fix/preserve-narration-requirements`; külön kérés nélkül ne merge-eld.
+A script_generator és mindkét szövegrövidítő most közvetlenül továbbítja a teljes
+`seed.text` értéket, így a generált `idea` nem veszítheti el közvetítőként a rímet,
+szócélt vagy más szerzői követelményt. Mentés előtt külön modellalapú ellenőrzés
+vizsgálja a narrációt; a hiba visszakerül a meglévő javítási ciklusba.
+Részletek és korlátok: [narration-requirements.md](narration-requirements.md).
+
+Aktuális felhasználói job: `20261005-180057`, The Poolside Splash Surprise.
+A feltöltött JSON/log szerint négy prózai jelenet, 70,95 s; a globális rövidítés
+első körében három jelölt elutasítva, utoljára egy karakter túllépése miatt.
+Kép/videó még nincs. Ez a fejlesztés a követelményátadást és ellenőrzést javítja;
+a szigorú karakterkeretet nem lazítja, a kis túllépések külön javítása nyitott.
+A meglévő narrációt nem konvertálja automatikusan verssé egy sima resume során.
+A felhasználó újrakezdést kért; merge után az eredeti bővített `--idea` használható,
+először `--stop-after script` mellett ellenőrizhető a verses szöveg TTS előtt.
+
+További igazolt állapot: a papagájos `20261003-112137` job 55,733 s, végső PASS.
+A `-OverruleQC` első éles végigfutása sikeres: az első jelenet képét megőrizte,
+a későbbi QC-k aktívak maradtak. A `-RetryQC` felhasználói tesztje még hátravan.
+A felhasználó elfogadta a 3D animáció + `realistic: true` keverékét; ne javítsd
+false-ra. Egyedi style_description esetén ne használjon `--visual-style` presetet.
+Windows runtime jobot/médiát nem módosítottunk; fizetős API-t nem futtattunk.
+Az alábbi bejegyzések történeti állapotok.
+
 
 ### 2026-10-02 — egységes jelenethossz és új-job TTS-ellenőrzés
 

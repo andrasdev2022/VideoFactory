@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from narration_requirements import (original_user_request, WRITER_INSTRUCTION,
+                                    review_narration, rewritten_scenes)
+
 from genre_policy import genre_instruction
 
 import argparse
@@ -1125,6 +1128,7 @@ def build_rewrite_context(
         )
 
     return {
+        "original_user_request": original_user_request(job),
         "idea":
             job.get(
                 "idea"
@@ -1199,7 +1203,7 @@ def generate_rewrite(
 
         user_message += (
             "\n\nThe previous candidate failed "
-            "deterministic validation. Fix every issue:\n"
+            "validation. Fix every issue:\n"
         )
 
         for error in validation_feedback:
@@ -1219,7 +1223,7 @@ def generate_rewrite(
                         "system",
 
                     "content":
-                        SYSTEM_PROMPT + genre_instruction(job),
+                        SYSTEM_PROMPT + "\n" + WRITER_INSTRUCTION + "\n" + genre_instruction(job),
                 },
                 {
                     "role":
@@ -1851,6 +1855,14 @@ def main() -> int:
             plan,
             output,
         )
+
+        if not errors:
+            try:
+                review_scenes = rewritten_scenes(job, {s.scene_id: s.voiceover for s in output.scenes})
+                errors.extend(review_narration(client, MODEL, job, review_scenes))
+            except Exception as exc:
+                print(f"\nERROR reviewing narration requirements: {exc}")
+                return 1
 
         if not errors:
 
