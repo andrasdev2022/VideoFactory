@@ -143,6 +143,7 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
+    parser.add_argument("--characters", help="Comma-separated library IDs; requires --idea.")
     parser.add_argument("--visual-style", choices=CHOICES, default=None, help="Visual preset; requires --idea. Resume uses the saved job style.")
     decisions = parser.add_mutually_exclusive_group()
     decisions.add_argument("-OverruleQC", action="store_true", help="Accept only the saved semantic QC result.")
@@ -152,6 +153,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("QC continuation flags cannot be combined with --idea.")
     if args.max_image_attempts > 4 or args.max_video_attempts > 4:
         parser.error("QC generation limits must not exceed 4 (initial + 3 repairs).")
+    if args.characters is not None and args.idea is None:
+        parser.error("--characters requires --idea; resume preserves the saved cast.")
     if args.visual_style is not None and args.idea is None:
         parser.error("--visual-style requires --idea; resume preserves the saved job style.")
 
@@ -1527,6 +1530,9 @@ def run_pipeline(
         if getattr(args, "visual_style", None) is not None:
             new_job_args.extend(["--visual-style", args.visual_style])
 
+        if getattr(args, "characters", None) is not None:
+            new_job_args.extend(["--characters", args.characters])
+
         if args.job_id:
             new_job_args.extend(
                 [
@@ -1805,6 +1811,7 @@ def main() -> int:
     print("=" * 72)
 
     args = parse_args()
+    previous_job_bytes = JOB_FILE.read_bytes() if args.idea is not None and JOB_FILE.exists() else None
 
     if args.idea is not None:
         try:
@@ -1814,6 +1821,9 @@ def main() -> int:
             spec = load_yaml(PROJECT_ROOT / "config" / "video_spec_v1.yaml")
             validate_idea_tts_environment(spec)
             scene_duration_range(spec)
+            if getattr(args, "characters", None) is not None:
+                from character_library import select
+                select(args.characters, PROJECT_ROOT)
         except Exception as exc:
             print(f"\nERROR: {exc}")
             return 1
@@ -1858,7 +1868,9 @@ def main() -> int:
 
     except Exception as exc:
 
-        if JOB_FILE.exists():
+        new_job_not_created = args.idea is not None and (
+            not JOB_FILE.exists() or JOB_FILE.read_bytes() == previous_job_bytes)
+        if JOB_FILE.exists() and not new_job_not_created:
             try:
                 job = load_job()
 
@@ -1903,13 +1915,12 @@ def main() -> int:
             f"\nERROR: {exc}"
         )
 
-        print(
-            "\nFix the problem, then resume with:"
-        )
-
-        print(
-            "python src\\pipeline_orchestrator.py"
-        )
+        if new_job_not_created:
+            print("\nNew job was not created. Existing job preserved. Fix the error, then repeat "
+                  "the original --idea command with --characters and --stop-after if supplied.")
+        else:
+            print("\nFix the problem, then resume with:")
+            print("python src\\pipeline_orchestrator.py")
 
         return 1
 

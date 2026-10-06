@@ -321,6 +321,9 @@ def apply_character_references(
 
         character_id = character["character_id"]
 
+        if character.get("library_asset"):
+            continue
+
         generated = result_map[character_id]
 
         image_path = (
@@ -433,6 +436,17 @@ def main() -> int:
         "characters",
         [],
     )
+
+    if characters and all(c.get("library_asset") for c in characters):
+        from character_library import verify_locked
+        try:
+            for character in characters:
+                verify_locked(character, PROJECT_ROOT)
+            print("SKIP: selected cast already has immutable reference prompts and images.")
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}")
+            return 1
 
     if not characters:
 

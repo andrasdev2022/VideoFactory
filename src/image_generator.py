@@ -213,6 +213,10 @@ def get_scene_character_references(
                 f"character '{character_id}' not found."
             )
 
+        if character.get("library_asset"):
+            from character_library import verify_locked
+            verify_locked(character, PROJECT_ROOT)
+
         reference = character.get(
             "reference",
             {},
@@ -393,6 +397,14 @@ def generate_character_reference(
 ) -> bool:
 
     require_approval(job)
+    if character.get("library_asset"):
+        from character_library import verify_locked
+        verify_locked(character, PROJECT_ROOT)
+        if force:
+            raise ValueError("Cannot force-regenerate a locked library character; create a new variant instead.")
+        character['reference']['supervisor_hash'] = job['visual_supervisor']['plan_hash']
+        print(f"  SKIP: immutable library reference {character['library_asset']['asset_id']}")
+        return False
 
     character_id = character[
         "character_id"

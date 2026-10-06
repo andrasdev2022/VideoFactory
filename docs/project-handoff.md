@@ -1,6 +1,43 @@
 # VideoFactory — projektátadó
 
-Frissítve: **2026-10-05**.
+Frissítve: **2026-10-06**.
+
+### 2026-10-06 — karakterpróba és kompatibilitási javítás (#32)
+
+Windows import igazolt: 49 importált karakter, 9 ismételt előfordulás, 64 kihagyott
+referenciakép nélküli történeti bejegyzés; exit 0. Kiválasztva:
+`bibi-cd39ad6222d2ed56,biscuit-dd9a20afe35d94fa,cuki-16b2cd772e9c085d`.
+A 111502 napló szerint az előzetes AI-review a régi videók stílusát és mellékszereplőit
+kötelezőnek tekintette, ezért tévesen leállt. Új job nem jött létre; a feltöltött
+video_job(7).json továbbra is a kész `20261005-182400` nyuszis videó.
+Javítás ugyanazon feature-ben: az eredetadatok leválasztva az identitásról a review,
+bootstrap és supervisor számára; stilizált karakter + realisztikus környezet
+megengedett. Konkrét identitásváltozás továbbra is hiba. A master is megőrzi a régi
+job bájtjait sikertelen új-job indításkor, és teljes --idea újrapróbát javasol.
+375 helyi teszt PASS; nincs fizetős API-próba. A felhasználó teljes új --idea indítása
+szükséges frissítés után; a YAML-t ehhez nem kell módosítani.
+
+### 2026-10-06 — közös karaktertár és kiválasztott szereplők
+
+Main ellenőrizve: `0cd2640`; #31 merge-elve, fejlesztés előtt nincs nyitott PR.
+Feature: `feature/character-library`; külön kérés nélkül ne merge-eld.
+Helyi import az aktuális/archivált jobokból, stabil tartalomalapú azonosítók,
+kereshető képes katalógus, 1–3 szereplő választása új `--idea` mellé
+`--characters` kapcsolóval. A bootstrap már a kiválasztott identitásokat kapja;
+előzetes és utólagos modellalapú kompatibilitási ellenőrzés, pontos identitásguard,
+önálló új-job képmásolat, supervisor-megőrzés és checksumellenőrzés.
+Részletes Windows-próba és UTF-8 naplózás: [character-library.md](character-library.md).
+Nincs automatikus ruhaváltás, vegyes új/importált szereplőgárda vagy variánsgenerátor.
+
+Legutóbbi igazolt Windows job: `20261005-182400`, The Poolside Splash Surprise.
+A 20261005-204345 resume napló szerint kész, 54,567 s, final QC PASS,
+Publish ready True, exit 0. A 3. jelenet korábbi output-moderation hibája a következő
+felhasználói futásban nem ismétlődött. Narráció: nova, a rímes szöveg nem igényelt
+időzítési átírást. A jelenlegi futások VIDEO_PROVIDER értéke still_motion.
+A karaktertár felhasználói Windows-próbája még hátravan. Windows runtime jobhoz
+és médiához nem nyúltunk; fizetős API-t nem futtattunk.
+Az alábbi bejegyzések történeti állapotok.
+
 
 ### 2026-10-05 — eredeti narrációs követelmények megőrzése
 

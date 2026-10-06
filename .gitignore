@@ -29,3 +29,6 @@ Thumbs.db
 
 # Test logs
 logs/
+
+# Local reusable character assets
+character_library/
