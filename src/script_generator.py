@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from narration_requirements import (original_user_request, WRITER_INSTRUCTION,
+                                    review_narration)
+
 from genre_policy import genre_instruction
 
 from pathlib import Path
@@ -111,6 +114,7 @@ def build_context(spec: dict, job: dict) -> dict:
     from duration_policy import scene_planning_spec
     spec = scene_planning_spec(spec)
     return {
+        "original_user_request": original_user_request(job),
         "video_spec": {
             "video": spec["video"],
             "content": spec["content"],
@@ -158,7 +162,7 @@ INPUT:
     if validation_feedback:
         user_prompt += """
 
-The previous attempt failed deterministic validation.
+The previous attempt failed validation.
 
 Fix all of these problems:
 
@@ -170,7 +174,7 @@ Fix all of these problems:
         input=[
             {
                 "role": "system",
-                "content": SYSTEM_PROMPT + genre_instruction(job),
+                "content": SYSTEM_PROMPT + "\n" + WRITER_INSTRUCTION + "\n" + genre_instruction(job),
             },
             {
                 "role": "user",
@@ -328,6 +332,14 @@ def main() -> int:
             spec,
             candidate_job,
         )
+
+        if not errors:
+            try:
+                errors.extend(review_narration(client, MODEL, original_job,
+                                                candidate_job['script']['scenes']))
+            except Exception as exc:
+                print(f"\nERROR reviewing narration requirements: {exc}")
+                return 1
 
         if not errors:
             break
