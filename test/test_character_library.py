@@ -90,7 +90,29 @@ class CharacterLibraryTests(unittest.TestCase):
         payload = client.responses.parse.call_args.kwargs['input']
         self.assertIn('SELECTED CAST', payload[0]['content'])
         self.assertEqual(json.loads(payload[1]['content'].split('\n\n', 1)[1])['selected_characters'],
-                         [s['character'] for s in selected])
+                         [lib.selected_identity(s) for s in selected])
+
+    def test_historical_style_and_cast_do_not_enter_review_or_new_character(self):
+        selected = self.selected()
+        selected[0]['source_style'] = {'visual': 'No photorealism. Pip and Grandpa Gus appear.'}
+        selected[0]['sources'] = [{'title': 'Miso and Grandma'}]
+        client = Mock()
+        client.responses.parse.side_effect = lambda **kw: SimpleNamespace(
+            output_parsed=kw['text_format'](errors=[]))
+        lib.review_selection(client, 'mock', 'Kael in a garden', {'visual': {'realistic': True}}, selected)
+        payload = client.responses.parse.call_args.kwargs['input']
+        self.assertNotIn('Grandpa Gus', payload[1]['content'])
+        self.assertNotIn('No photorealism', payload[1]['content'])
+        self.assertIn('may coexist with stylized characters', payload[0]['content'])
+        job = copy.deepcopy(self.old); job['job_id'] = 'new'
+        lib.attach(job, selected, self.root)
+        self.assertNotIn('source_style', job['characters'][0]['library_asset'])
+        self.assertEqual(job['character_library_provenance']['c1']['sources'], selected[0]['sources'])
+        # Older imported jobs also cannot expose historical style/cast to supervisor.
+        job['characters'][0]['library_asset'].update(source_style=selected[0]['source_style'],
+                                                    sources=selected[0]['sources'])
+        self.assertNotIn('Grandpa Gus', json.dumps(vs.source(job)))
+        self.assertNotIn('Miso and Grandma', json.dumps(vs.source(job)))
 
     def test_compatibility_review_fails_closed(self):
         client = Mock()
@@ -177,6 +199,22 @@ class CharacterLibraryTests(unittest.TestCase):
             lib.local_path(self.root, c['reference']['image_file']).write_bytes(b'tampered')
             with self.assertRaisesRegex(ValueError, 'missing or changed'):
                 images.get_scene_character_references(job, job['visuals']['scenes'][0])
+
+    def test_master_new_job_failure_does_not_mark_previous_job_failed(self):
+        path = self.root / 'jobs/video_job.json'
+        before = path.read_bytes()
+        args = SimpleNamespace(idea='new story', characters=None, OverruleQC=False, RetryQC=False)
+        captured = io.StringIO()
+        with patch.object(pipeline, 'JOB_FILE', path), \
+             patch.object(pipeline, 'parse_args', return_value=args), \
+             patch('tts_settings.validate_idea_tts_environment'), \
+             patch('duration_policy.scene_duration_range'), \
+             patch.object(pipeline, 'preflight'), \
+             patch.object(pipeline, 'run_pipeline', side_effect=RuntimeError('cast conflict')), \
+             redirect_stdout(captured):
+            self.assertEqual(pipeline.main(), 1)
+        self.assertEqual(path.read_bytes(), before)
+        self.assertIn('repeat the original --idea command', captured.getvalue())
 
     def test_resume_rejects_selection_argument(self):
         with patch('sys.argv', ['pipeline_orchestrator.py', '--characters', 'pip']), redirect_stdout(io.StringIO()):

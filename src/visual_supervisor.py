@@ -118,7 +118,9 @@ def source(job):
         'scenes': [{k: s.get(k) for k in ('scene_id', 'image_prompt', 'motion_prompt',
                    'negative_prompt', 'continuity_notes', 'characters', 'still_motion')}
                    for s in job.get('visuals', {}).get('scenes', [])],
-        'characters': [{**{k: v for k, v in c.items() if k != 'reference'},
+        'characters': [{**{k: v for k, v in c.items() if k not in ('reference', 'library_asset')},
+                        **({'library_asset': {k: c['library_asset'].get(k) for k in
+                                              ('asset_id', 'image_sha256')}} if c.get('library_asset') else {}),
                         'reference': {k: c.get('reference', {}).get(k) for k in
                                       ('prompt', 'negative_prompt', 'visual_signature')}}
                        for c in job.get('characters', [])],
@@ -325,8 +327,12 @@ def ask(client, schema, instruction, context):
 SCOPE = '''
 Characters with library_asset have immutable, already generated reference images.
 Their appearance, clothing and visual medium cannot be redesigned. Reconcile scene
-contracts to these supplied identities and source_style. Reject incompatible style
-or story requirements; never solve a conflict by regenerating their references.
+contracts to these supplied identities. Old video style and supporting cast are
+historical provenance, not current requirements. Realistic environments, lighting,
+water and materials can coexist with stylized characters; general realism labels
+alone do not require redesign. Preserve their character designs in the new setting.
+Reject concrete incompatible identity changes, not historical style labels.
+Never solve a conflict by regenerating their references.
 \nSCOPE: You may edit visual instructions only. Existing narration, measured timing,\nscene count, CTA text, subtitles, audio and export settings are immutable and owned\nby other workers. Do not impose old template pacing on measured timing. Never\nallocate timestamps, durations, CTA segments, subtitle layers or export work in\na visual contract. Acknowledge these constraints without copying them into the\ncontract. Any genuine incompatibility must be reported, not repaired by invented\nschedules. A reflection absence is a visual requirement; preserve it exactly.\nWhen previous_plan is supplied, return ONLY changed scene/reference contracts;\nuse empty lists for unchanged ones. Avoid stylistic rewrites of approved prompts.\nScheduling-only prose in previous plans has already been removed deterministically.\nThe reviewer receives the full merged plan, and must audit every scene.\n'''
 
 PLANNER = '''You supervise the ENTIRE visual plan before ANY image API call.

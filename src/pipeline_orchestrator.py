@@ -1811,6 +1811,7 @@ def main() -> int:
     print("=" * 72)
 
     args = parse_args()
+    previous_job_bytes = JOB_FILE.read_bytes() if args.idea is not None and JOB_FILE.exists() else None
 
     if args.idea is not None:
         try:
@@ -1867,7 +1868,9 @@ def main() -> int:
 
     except Exception as exc:
 
-        if JOB_FILE.exists():
+        new_job_not_created = args.idea is not None and (
+            not JOB_FILE.exists() or JOB_FILE.read_bytes() == previous_job_bytes)
+        if JOB_FILE.exists() and not new_job_not_created:
             try:
                 job = load_job()
 
@@ -1912,13 +1915,12 @@ def main() -> int:
             f"\nERROR: {exc}"
         )
 
-        print(
-            "\nFix the problem, then resume with:"
-        )
-
-        print(
-            "python src\\pipeline_orchestrator.py"
-        )
+        if new_job_not_created:
+            print("\nNew job was not created. Existing job preserved. Fix the error, then repeat "
+                  "the original --idea command with --characters and --stop-after if supplied.")
+        else:
+            print("\nFix the problem, then resume with:")
+            print("python src\\pipeline_orchestrator.py")
 
         return 1
 

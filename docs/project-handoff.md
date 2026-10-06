@@ -2,6 +2,21 @@
 
 Frissítve: **2026-10-06**.
 
+### 2026-10-06 — karakterpróba és kompatibilitási javítás (#32)
+
+Windows import igazolt: 49 importált karakter, 9 ismételt előfordulás, 64 kihagyott
+referenciakép nélküli történeti bejegyzés; exit 0. Kiválasztva:
+`bibi-cd39ad6222d2ed56,biscuit-dd9a20afe35d94fa,cuki-16b2cd772e9c085d`.
+A 111502 napló szerint az előzetes AI-review a régi videók stílusát és mellékszereplőit
+kötelezőnek tekintette, ezért tévesen leállt. Új job nem jött létre; a feltöltött
+video_job(7).json továbbra is a kész `20261005-182400` nyuszis videó.
+Javítás ugyanazon feature-ben: az eredetadatok leválasztva az identitásról a review,
+bootstrap és supervisor számára; stilizált karakter + realisztikus környezet
+megengedett. Konkrét identitásváltozás továbbra is hiba. A master is megőrzi a régi
+job bájtjait sikertelen új-job indításkor, és teljes --idea újrapróbát javasol.
+375 helyi teszt PASS; nincs fizetős API-próba. A felhasználó teljes új --idea indítása
+szükséges frissítés után; a YAML-t ehhez nem kell módosítani.
+
 ### 2026-10-06 — közös karaktertár és kiválasztott szereplők
 
 Main ellenőrizve: `0cd2640`; #31 merge-elve, fejlesztés előtt nincs nyitott PR.

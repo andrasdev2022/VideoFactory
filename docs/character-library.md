@@ -99,3 +99,24 @@ ellenőrzi az ismételt importot, forrásfüggetlen másolatokat, sérülést, �
 katalógus-escape-et, tényleges bootstrap requestet, konfliktus miatti megállást,
 sikeres új-job mentést és archiválást, illetve a supervisor és képgenerátor
 referenciamegőrzését. Fizetős generálás a helyi tesztben nem történik.
+
+## YAML és korábbi videók stílusa
+
+A karakterválasztás a `--characters`, az új történet és a rímelési igény a `--idea`
+feladata. A YAML célhosszt, általános megjelenést, hangot és előadásmódot ad meg.
+Ezeket az új `--idea` előtt módosítsd; a létrejött job folytatása a saját mentett
+spec_snapshot értékeit használja. Ehhez a karakterpróbához nem kell YAML-módosítás.
+Az explicit OPENAI_TTS_VOICE/MODEL/FORMAT környezeti értékeknek továbbra is egyezniük
+kell a YAML megfelelő értékeivel új indításkor.
+
+A régi videó source_style és sources adatai kizárólag eredetadatok. Nem írják elő
+az új videó szereplőgárdáját vagy teljes vizuális stílusát. Stilizált karakterek
+használhatók realisztikus vízzel, fényekkel és környezettel; a megjelenésük, ruhájuk
+és referenciaképük ettől még rögzített. A kompatibilitási kérés csak a kiválasztott
+karakter identitását és vizuális ismertetőjegyeit tartalmazza. A supervisor sem kapja
+meg az eredetadatokat kötelező karakterkövetelményként.
+
+Ha az új-job ellenőrzés hibával leállt, és még nem készült új job, a teljes eredeti
+`--idea ... --characters ... --stop-after script` indítást kell megismételni a javítás
+után. A sima resume ilyenkor a régi videóra vonatkozna. A master az új job létrejötte
+előtti hibánál nem jelöli hibásra és nem menti újra a régi jobot.

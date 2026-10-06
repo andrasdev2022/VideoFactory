@@ -328,7 +328,7 @@ def generate_bootstrap(
     )
 
     if selected:
-        context["selected_characters"] = [x["character"] for x in selected]
+        context["selected_characters"] = [cast.selected_identity(x) for x in selected]
 
     response = client.responses.parse(
         model=MODEL,
