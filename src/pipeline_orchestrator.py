@@ -143,6 +143,7 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
+    parser.add_argument("--characters", help="Comma-separated library IDs; requires --idea.")
     parser.add_argument("--visual-style", choices=CHOICES, default=None, help="Visual preset; requires --idea. Resume uses the saved job style.")
     decisions = parser.add_mutually_exclusive_group()
     decisions.add_argument("-OverruleQC", action="store_true", help="Accept only the saved semantic QC result.")
@@ -152,6 +153,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("QC continuation flags cannot be combined with --idea.")
     if args.max_image_attempts > 4 or args.max_video_attempts > 4:
         parser.error("QC generation limits must not exceed 4 (initial + 3 repairs).")
+    if args.characters is not None and args.idea is None:
+        parser.error("--characters requires --idea; resume preserves the saved cast.")
     if args.visual_style is not None and args.idea is None:
         parser.error("--visual-style requires --idea; resume preserves the saved job style.")
 
@@ -1527,6 +1530,9 @@ def run_pipeline(
         if getattr(args, "visual_style", None) is not None:
             new_job_args.extend(["--visual-style", args.visual_style])
 
+        if getattr(args, "characters", None) is not None:
+            new_job_args.extend(["--characters", args.characters])
+
         if args.job_id:
             new_job_args.extend(
                 [
@@ -1814,6 +1820,9 @@ def main() -> int:
             spec = load_yaml(PROJECT_ROOT / "config" / "video_spec_v1.yaml")
             validate_idea_tts_environment(spec)
             scene_duration_range(spec)
+            if getattr(args, "characters", None) is not None:
+                from character_library import select
+                select(args.characters, PROJECT_ROOT)
         except Exception as exc:
             print(f"\nERROR: {exc}")
             return 1

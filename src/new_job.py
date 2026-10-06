@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from tts_settings import resolve_tts_settings
+import character_library as cast
 
 from sfx_policy import sound_effects_enabled
 
@@ -11,6 +12,7 @@ from copy import deepcopy
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 
@@ -123,6 +125,7 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument("--visual-style", choices=CHOICES, default=None, help="Visual preset for this new job.")
+    parser.add_argument("--characters", help="Comma-separated character library IDs (1–3).")
     return parser.parse_args()
 
 
@@ -315,6 +318,7 @@ def generate_bootstrap(
     client: OpenAI,
     seed: str,
     spec: dict,
+    selected: list | None = None,
 ) -> BootstrapOutput:
 
     spec = prepare_spec(spec)
@@ -322,6 +326,9 @@ def generate_bootstrap(
         seed,
         spec,
     )
+
+    if selected:
+        context["selected_characters"] = [x["character"] for x in selected]
 
     response = client.responses.parse(
         model=MODEL,
@@ -332,7 +339,7 @@ def generate_bootstrap(
                     "system",
 
                 "content":
-                    SYSTEM_PROMPT + genre_instruction(spec=spec),
+                    SYSTEM_PROMPT + genre_instruction(spec=spec) + (cast.LOCK_INSTRUCTION if selected else ""),
             },
             {
                 "role":
@@ -786,7 +793,10 @@ def main() -> int:
         resolve_tts_settings(spec)
         print(f"Visual style: {args.visual_style or 'default'}")
 
+        selected = cast.select(args.characters, PROJECT_ROOT) if getattr(args, "characters", None) is not None else []
         client = OpenAI()
+        if selected:
+            cast.review_selection(client, MODEL, args.idea, spec, selected)
 
         print(
             f"\nModel: {MODEL}"
@@ -800,7 +810,17 @@ def main() -> int:
             client,
             args.idea,
             spec,
+            **({"selected": selected} if selected else {}),
         )
+
+        if selected:
+            if len(result.characters) != len(selected):
+                raise ValueError("Bootstrap changed selected cast size; current job preserved.")
+            for generated, item in zip(result.characters, selected):
+                for key in cast.IDENTITY_KEYS:
+                    if getattr(generated, key) != item["character"][key]:
+                        raise ValueError(f"Bootstrap changed locked {key}: {item['asset_id']}; current job preserved.")
+            cast.review_selection(client, MODEL, args.idea, spec, selected, result.model_dump())
 
         errors = validate_bootstrap(
             result
@@ -818,7 +838,10 @@ def main() -> int:
             or make_job_id()
         )
 
-        archived = archive_current_job()
+        if selected and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", job_id):
+            raise ValueError("Job ID must contain only letters, digits, underscores and hyphens.")
+        if selected and (PROJECT_ROOT / "output" / job_id).exists():
+            raise ValueError("Job output directory already exists; choose a new job ID.")
 
         job = build_job(
             result,
@@ -832,6 +855,9 @@ def main() -> int:
             "text"
         ] = args.idea
 
+        if selected:
+            cast.attach(job, selected, PROJECT_ROOT)
+        archived = archive_current_job()
         save_job_atomic(
             job
         )
